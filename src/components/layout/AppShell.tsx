@@ -5,6 +5,7 @@ const navItems = [
   { to: '/', label: 'Dashboard' },
   { to: '/create', label: 'Asset create' },
   { to: '/assign', label: 'Asset assign' },
+  { to: '/reports', label: 'Hisobotlar' },
 ]
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -53,6 +54,7 @@ export function AppShell({ children }: PropsWithChildren) {
               <li>Category va type bo'yicha assetlarni ko'rish</li>
               <li>Dynamic form orqali asset create qilish</li>
               <li>Assetni departmentga tez biriktirish</li>
+              <li>Haftalik, oylik va yillik hisobotlarni export qilish</li>
             </ul>
           </div>
         </div>

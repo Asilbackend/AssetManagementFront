@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { AssetRecord } from '../../types'
 import { formatDate, readAssetPrimaryDetails, statusTone } from '../../utils/asset'
 
@@ -31,6 +32,12 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
         >
           {asset.status}
         </span>
+        <Link
+          to={`/assets/${asset.id}/edit`}
+          className="inline-flex w-fit rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          Edit asset
+        </Link>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">

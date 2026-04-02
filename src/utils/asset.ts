@@ -1,4 +1,11 @@
-import type { AssetAttribute, AssetRecord, AssetTypeDefinition, Status } from '../types'
+import type {
+  AssetAttribute,
+  AssetRecord,
+  AssetTypeDefinition,
+  CategoryType,
+  Status,
+} from '../types'
+import { categoryTypeLabels } from './category'
 
 export const statusLabels: Record<Status, string> = {
   available: 'Omborda',
@@ -18,6 +25,13 @@ export const formatDate = (value: string) => {
     year: 'numeric',
   }).format(new Date(value))
 }
+
+export const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(value)
 
 export const buildAssetCode = (
   assetType: AssetTypeDefinition,
@@ -53,12 +67,23 @@ export const nextSequenceForType = (
 export const buildEmptyAttributes = (attributes: AssetAttribute[]) =>
   Object.fromEntries(attributes.map((attribute) => [attribute.name, '']))
 
+export const filterAssetsByCategoryType = (
+  assets: AssetRecord[],
+  categoryType: CategoryType | 'all',
+) =>
+  categoryType === 'all'
+    ? assets
+    : assets.filter((asset) => asset.categoryType === categoryType)
+
 export const readAssetPrimaryDetails = (asset: AssetRecord) => [
   { label: 'Asset code', value: asset.assetCode },
+  { label: 'Category type', value: categoryTypeLabels[asset.categoryType] },
   { label: 'Category', value: asset.categoryName },
   { label: 'Asset type', value: asset.assetTypeName },
   { label: 'Status', value: statusLabels[asset.status] },
+  { label: 'Purchase price', value: formatCurrency(asset.purchasePrice) },
   { label: 'Department', value: asset.departmentName ?? 'Ombor' },
+  { label: 'Returned date', value: formatDate(asset.returnDate ?? '') },
   { label: 'Purchase date', value: formatDate(asset.purchaseDate) },
   { label: 'Warranty date', value: formatDate(asset.warrantyDate) },
 ]

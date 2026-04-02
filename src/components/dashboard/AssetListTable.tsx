@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { AssetRecord } from '../../types'
 import { statusLabels, statusTone } from '../../utils/asset'
 
@@ -14,6 +15,14 @@ export function AssetListTable({
   onSelect,
   onViewDetails,
 }: AssetListTableProps) {
+  if (assets.length === 0) {
+    return (
+      <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        Ushbu filter bo'yicha asset topilmadi.
+      </div>
+    )
+  }
+
   return (
     <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[var(--shadow-card)]">
       <div className="overflow-x-auto">
@@ -57,16 +66,25 @@ export function AssetListTable({
                 </td>
                 <td className="px-5 py-4 text-sm text-slate-600">{asset.purchaseDate}</td>
                 <td className="px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onViewDetails?.(asset.id)
-                    }}
-                    className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-slate-700"
-                  >
-                    Details
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onViewDetails?.(asset.id)
+                      }}
+                      className="rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-slate-700"
+                    >
+                      Details
+                    </button>
+                    <Link
+                      to={`/assets/${asset.id}/edit`}
+                      onClick={(event) => event.stopPropagation()}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Edit
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -17,6 +17,7 @@ export function AssignAssetPage() {
     date: today,
     employee: '',
     note: '',
+    returnDate: '',
   })
 
   const assignableAssets = useMemo(
@@ -58,6 +59,7 @@ export function AssignAssetPage() {
       date: today,
       employee: '',
       note: '',
+      returnDate: '',
     })
   }
 
@@ -201,6 +203,23 @@ export function AssignAssetPage() {
                 placeholder="Masalan: 3-qavat branch ofisga berildi"
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
               />
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                Qaytarib berilgan sana
+              </span>
+              <input
+                type="date"
+                value={form.returnDate}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, returnDate: event.target.value }))
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+              />
+              <span className="text-xs text-slate-500">
+                Ixtiyoriy. Asset qaytarilganda shu maydonni to'ldirish mumkin.
+              </span>
             </label>
 
             <button

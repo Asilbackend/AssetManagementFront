@@ -6,8 +6,15 @@ import { AssetTypeCard } from '../components/dashboard/AssetTypeCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useAssetStore } from '../context/AssetContext'
 import { assetTypes, categories } from '../data/mockData'
-import type { Status } from '../types'
-import { statusLabels } from '../utils/asset'
+import type { CategoryType, Status } from '../types'
+import { filterAssetsByCategoryType, statusLabels } from '../utils/asset'
+import {
+  categoryTypeDescriptions,
+  categoryTypeLabels,
+  categoryTypeTabs,
+  categoryTypeTone,
+  filterCategoriesByType,
+} from '../utils/category'
 
 const statusTabs = [
   { id: 'all', label: 'Barchasi' },
@@ -18,74 +25,82 @@ const statusTabs = [
 ] as const
 
 type StatusFilter = (typeof statusTabs)[number]['id']
+type CategoryTypeFilter = 'all' | CategoryType
 
 export function DashboardPage() {
-  const { assets } = useAssetStore()
+  const { assets, listAssets } = useAssetStore()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [categoryTypeFilter, setCategoryTypeFilter] = useState<CategoryTypeFilter>('all')
   const [selectedTypeId, setSelectedTypeId] = useState<string>('')
   const [selectedAssetId, setSelectedAssetId] = useState<string>('')
   const [modalView, setModalView] = useState<'list' | 'detail' | null>(null)
 
+  const categoryScopedAssets = useMemo(
+    () => listAssets({ categoryType: categoryTypeFilter }),
+    [categoryTypeFilter, listAssets],
+  )
+
   const visibleAssets = useMemo(
     () =>
-      assets.filter((asset) =>
+      filterAssetsByCategoryType(assets, categoryTypeFilter).filter((asset) =>
         statusFilter === 'all' ? true : asset.status === (statusFilter as Status),
       ),
-    [assets, statusFilter],
+    [assets, categoryTypeFilter, statusFilter],
+  )
+
+  const filteredCategories = useMemo(
+    () => filterCategoriesByType(categories, categoryTypeFilter),
+    [categoryTypeFilter],
+  )
+
+  const filteredAssetTypes = useMemo(
+    () =>
+      assetTypes.filter((assetType) =>
+        categoryTypeFilter === 'all' ? true : assetType.categoryType === categoryTypeFilter,
+      ),
+    [categoryTypeFilter],
   )
 
   const assetsByType = useMemo(
     () =>
       Object.fromEntries(
-        assetTypes.map((assetType) => [
+        filteredAssetTypes.map((assetType) => [
           assetType.id,
           visibleAssets.filter((asset) => asset.assetTypeId === assetType.id),
         ]),
       ),
-    [visibleAssets],
+    [filteredAssetTypes, visibleAssets],
   )
 
   const modalAssets = assetsByType[selectedTypeId] ?? []
   const selectedAsset =
     modalAssets.find((asset) => asset.id === selectedAssetId) ?? modalAssets[0]
 
-  const stats = useMemo(() => {
-    const assignedCount = assets.filter((asset) => asset.status === 'assigned').length
-    const availableCount = assets.filter((asset) => asset.status === 'available').length
-    const maintenanceCount = assets.filter((asset) => asset.status === 'maintenance').length
-    const brokenCount = assets.filter((asset) => asset.status === 'broken').length
-    const activeCategoryCount = categories.filter((category) =>
-      assets.some((asset) => asset.categoryId === category.id),
-    ).length
-    const activeTypeCount = assetTypes.filter((assetType) =>
-      assets.some((asset) => asset.assetTypeId === assetType.id),
-    ).length
-
-    return {
-      assignedCount,
-      availableCount,
-      maintenanceCount,
-      brokenCount,
-      activeCategoryCount,
-      activeTypeCount,
-    }
-  }, [assets])
-
-  const filteredCategories = useMemo(
+  const categorySections = useMemo(
     () =>
-      categories
-        .map((category) => {
-          const categoryTypes = assetTypes
-            .filter((assetType) => assetType.categoryId === category.id)
-            .filter((assetType) => (assetsByType[assetType.id] ?? []).length > 0)
+      filteredCategories.map((category) => {
+        const categoryAssetTypes = filteredAssetTypes.filter(
+          (assetType) => assetType.categoryId === category.id,
+        )
 
-          return {
-            ...category,
-            categoryTypes,
-          }
-        })
-        .filter((category) => category.categoryTypes.length > 0),
-    [assetsByType],
+        return {
+          ...category,
+          categoryAssetTypes,
+          assetCount: visibleAssets.filter((asset) => asset.categoryId === category.id).length,
+        }
+      }),
+    [filteredAssetTypes, filteredCategories, visibleAssets],
+  )
+
+  const stats = useMemo(
+    () => ({
+      totalAssets: categoryScopedAssets.length,
+      visibleAssets: visibleAssets.length,
+      assignedCount: categoryScopedAssets.filter((asset) => asset.status === 'assigned').length,
+      activeCategoryCount: filteredCategories.length,
+      activeTypeCount: filteredAssetTypes.length,
+    }),
+    [categoryScopedAssets, filteredAssetTypes, filteredCategories, visibleAssets],
   )
 
   const openTypeModal = (typeId: string) => {
@@ -110,26 +125,72 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Dashboard"
-        title="Category → Asset type → modal asset list"
-        description="Asset type bosilganda list pastda emas, modal ichida ochiladi. `Details` bosilganda esa assetning to'liq ma'lumoti alohida modalda chiqadi."
+        title="Category type bo'yicha boshqariladigan asset dashboard"
+        description="Dashboard endi category type ni birinchi darajali filter sifatida ishlatadi. Tanlangan type asosida categorylar, asset typelar, asset sonlari va modal ro'yxatlar dinamik yangilanadi."
         rightSlot={
           <>
             <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
-              Jami assetlar: {assets.length}
+              Scope assetlar: {stats.totalAssets}
             </div>
             <div className="rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-700">
-              Jami type lar: {assetTypes.length}
+              Ko'rinayotgan assetlar: {stats.visibleAssets}
             </div>
           </>
         }
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
+              Category type filter
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
+              Assetlarni asosiy guruh bo'yicha filtrlash
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Hardware, Software va Non-IT Assets kesimida dashboard ko'rinishini boshqaring.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {categoryTypeTabs.map((tab) => {
+              const count =
+                tab.id === 'all'
+                  ? assets.length
+                  : assets.filter((asset) => asset.categoryType === tab.id).length
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setCategoryTypeFilter(tab.id)}
+                  className={[
+                    'rounded-full px-4 py-2 text-sm font-semibold transition',
+                    categoryTypeFilter === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                  ].join(' ')}
+                >
+                  {tab.label} ({count})
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Umumiy asset
+            Scope asset
           </p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{assets.length}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-900">{stats.totalAssets}</p>
+        </article>
+        <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            Hozirgi ko'rinish
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-amber-700">{stats.visibleAssets}</p>
         </article>
         <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -139,93 +200,117 @@ export function DashboardPage() {
         </article>
         <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Assigned bo'lmagan
-          </p>
-          <p className="mt-3 text-3xl font-semibold text-emerald-700">
-            {assets.length - stats.assignedCount}
-          </p>
-        </article>
-        <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
             Category
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-900">{stats.activeCategoryCount}</p>
         </article>
         <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Type
+            Asset type
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-900">{stats.activeTypeCount}</p>
         </article>
-        {/* <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Riskdagi asset
-          </p>
-          <p className="mt-3 text-3xl font-semibold text-amber-700">
-            {stats.maintenanceCount + stats.brokenCount}
-          </p>
-        </article> */}
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
-              Filter
+              Status filter
             </p>
             <h3 className="mt-2 text-xl font-semibold text-slate-900">
-              Assigned assetlarni ham dashboard ichida ko'rish
+              Tanlangan category type ichida status bo'yicha kesim
             </h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            {statusTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id)}
-                className={[
-                  'rounded-full px-4 py-2 text-sm font-semibold transition',
-                  statusFilter === tab.id
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
-                ].join(' ')}
-              >
-                {tab.id === 'all'
-                  ? tab.label
-                  : `${tab.label} (${assets.filter((asset) => asset.status === tab.id).length})`}
-              </button>
-            ))}
+            {statusTabs.map((tab) => {
+              const count =
+                tab.id === 'all'
+                  ? categoryScopedAssets.length
+                  : categoryScopedAssets.filter((asset) => asset.status === tab.id).length
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={[
+                    'rounded-full px-4 py-2 text-sm font-semibold transition',
+                    statusFilter === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                  ].join(' ')}
+                >
+                  {tab.label} ({count})
+                </button>
+              )
+            })}
           </div>
         </div>
       </section>
 
-      <div className="space-y-8">
-        {filteredCategories.map((category) => {
-          const categoryAssetCount = visibleAssets.filter(
-            (asset) => asset.categoryId === category.id,
-          ).length
+      {categoryTypeFilter !== 'all' ? (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
+                Current type
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">
+                {categoryTypeLabels[categoryTypeFilter]}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {categoryTypeDescriptions[categoryTypeFilter]}
+              </p>
+            </div>
+            <span
+              className={`inline-flex w-fit rounded-full px-4 py-2 text-sm font-semibold ${categoryTypeTone[categoryTypeFilter]}`}
+            >
+              {categoryTypeLabels[categoryTypeFilter]}
+            </span>
+          </div>
+        </section>
+      ) : null}
 
-          return (
+      {categorySections.length === 0 ? (
+        <section className="rounded-[28px] border border-dashed border-slate-300 bg-white/80 p-8 text-center shadow-[var(--shadow-card)]">
+          <h3 className="text-xl font-semibold text-slate-900">Bu type uchun category topilmadi</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Non-IT Assets uchun tuzilma tayyor. Keyinchalik yangi categorylar qo'shilsa shu filter
+            ichida avtomatik ko'rinadi.
+          </p>
+        </section>
+      ) : (
+        <div className="space-y-8">
+          {categorySections.map((category) => (
             <section key={category.id} className="space-y-4">
-              <div className="rounded-[28px] border border-slate-400 bg-slate-200  p-5 shadow-[var(--shadow-card)]">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-900">{category.name}</h3>
-                    <p className="mt-1 text-sm text-slate-500">{category.description}</p>
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="max-w-3xl">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-xl font-semibold text-slate-900">{category.name}</h3>
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${categoryTypeTone[category.categoryType]}`}
+                      >
+                        {categoryTypeLabels[category.categoryType]}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-slate-600">{category.englishLabel}</p>
+                    <p className="mt-2 text-sm text-slate-500">{category.description}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                      Asset type lar: {category.categoryTypes.length}
+                      Asset type lar: {category.categoryAssetTypes.length}
                     </div>
                     <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-700">
-                      Assetlar: {categoryAssetCount}
+                      Assetlar: {category.assetCount}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {category.categoryTypes.map((assetType) => (
+                {category.categoryAssetTypes.map((assetType) => (
                   <AssetTypeCard
                     key={assetType.id}
                     assetType={assetType}
@@ -236,14 +321,14 @@ export function DashboardPage() {
                 ))}
               </div>
             </section>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
       {modalView === 'list' ? (
         <DashboardModal
           title={assetTypes.find((item) => item.id === selectedTypeId)?.name ?? 'Asset list'}
-          description={`Bu typedagi assetlar ro'yxati. Filter: ${statusFilter === 'all' ? 'Barchasi' : statusLabels[statusFilter as Status]}. Details bosib to'liq ma'lumotga o'tishingiz mumkin.`}
+          description={`Filter: ${categoryTypeFilter === 'all' ? 'All category types' : categoryTypeLabels[categoryTypeFilter]}, ${statusFilter === 'all' ? 'Barchasi' : statusLabels[statusFilter as Status]}.`}
           onClose={closeModal}
         >
           <div className="space-y-4">
@@ -274,7 +359,7 @@ export function DashboardPage() {
       {modalView === 'detail' ? (
         <DashboardModal
           title={selectedAsset?.name ?? 'Asset detail'}
-          description="Assetga tegishli to'liq ma'lumot, xarakteristika va history shu modal ichida ko'rsatiladi."
+          description="Assetga tegishli to'liq ma'lumot, category type, xarakteristika va history shu modal ichida ko'rsatiladi."
           onClose={closeModal}
           onBack={() => setModalView('list')}
         >

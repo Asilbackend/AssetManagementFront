@@ -2,6 +2,8 @@ export type Status = 'available' | 'assigned' | 'maintenance' | 'broken'
 
 export type AttributeType = 'text' | 'number' | 'date' | 'select' | 'textarea'
 
+export type CategoryType = 'HARDWARE' | 'SOFTWARE' | 'NON_IT'
+
 export type AssetAttribute = {
   id: string
   name: string
@@ -14,7 +16,9 @@ export type AssetAttribute = {
 export type CategoryDefinition = {
   id: string
   name: string
+  englishLabel: string
   description: string
+  categoryType: CategoryType
 }
 
 export type AssetTypeDefinition = {
@@ -23,8 +27,10 @@ export type AssetTypeDefinition = {
   name: string
   categoryId: string
   categoryName: string
+  categoryType: CategoryType
   description: string
-  count: number
+  seedCount: number
+  defaultPrice: number
   attributes: AssetAttribute[]
 }
 
@@ -41,38 +47,56 @@ export type AssetHistory = {
   note: string
   departmentId?: string
   departmentName?: string
+  returnDate?: string
 }
 
 export type AssetRecord = {
   id: string
   assetCode: string
   name: string
+  categoryType: CategoryType
   categoryId: string
   categoryName: string
   assetTypeId: string
   assetTypeName: string
   status: Status
+  purchasePrice: number
   purchaseDate: string
   warrantyDate: string
   departmentId?: string
   departmentName?: string
+  returnDate?: string
   attributes: Record<string, string>
   history: AssetHistory[]
 }
 
 export type CreateAssetInput = {
   name: string
+  categoryType: CategoryType
   categoryId: string
   assetTypeId: string
+  quantity: number
+  purchasePrice: number
   purchaseDate: string
   warrantyDate: string
   status: Status
   attributes: Record<string, string>
 }
 
+export type UpdateAssetInput = Omit<CreateAssetInput, 'quantity'>
+
 export type AssignPayload = {
   departmentId: string
   date: string
   employee: string
   note: string
+  returnDate?: string
+}
+
+export type ReportPeriod = 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+
+export type ReportPreset = {
+  id: ReportPeriod
+  label: string
+  description: string
 }
