@@ -58,6 +58,11 @@ export type User = {
   team: string
 }
 
+export type Department = {
+  id: string
+  name: string
+}
+
 export type Asset = {
   id: string
   assetTag: string
@@ -98,6 +103,10 @@ export type AssignmentRecord = {
   toRole: Role | null
   note: string
   createdAt: string
+  effectiveDate?: string
+  departmentId?: string
+  departmentName?: string
+  returnDate?: string
   ipAddress?: string
 }
 
@@ -106,6 +115,7 @@ export type MockData = {
   roles: Role[]
   agents: AgentDefinition[]
   users: User[]
+  departments?: Department[]
   assetTypes: AssetType[]
   assets: Asset[]
   agentStatuses: AgentStatusRecord[]

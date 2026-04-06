@@ -8,6 +8,10 @@ import {
   type PropsWithChildren,
 } from 'react'
 import { useToast } from '../components/ui/ToastProvider'
+import type {
+  CreateAssetInput as LegacyCreateAssetInput,
+  UpdateAssetInput as LegacyUpdateAssetInput,
+} from '../types'
 import {
   assetSupportsIp,
   buildAssetTag,
@@ -16,11 +20,19 @@ import {
   getAssetReadiness,
   usersByRole,
 } from '../domain/rules'
+import {
+  buildLegacyMetadataForCreate,
+  enrichMockData,
+  findLegacyAssetTypeById,
+  findLegacyCategory,
+  mergeLegacyMetadata,
+} from '../utils/mockSync'
 import type {
   AgentCode,
   AgentStatus,
   Asset,
   AssetType,
+  AssignmentRecord,
   MockData,
   Role,
   User,
@@ -37,6 +49,12 @@ type CreateAssetInput = {
   metadata: Record<string, string>
 }
 
+function compactMetadata(input: Record<string, string | undefined>) {
+  return Object.fromEntries(
+    Object.entries(input).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
+}
+
 type AppStoreValue = {
   data: MockData | null
   currentUser: User | null
@@ -46,7 +64,19 @@ type AppStoreValue = {
   getUserById: (userId: string | null) => User | null
   getUsersByRole: (role: Role) => User[]
   createAsset: (payload: CreateAssetInput) => void
+  createLegacyAssets: (payload: LegacyCreateAssetInput) => void
+  updateLegacyAsset: (assetId: string, payload: LegacyUpdateAssetInput) => void
   assignFromWarehouse: (assetId: string, targetUserId: string) => void
+  assignAssetsFromWarehouse: (
+    assetIds: string[],
+    targetUserId: string,
+    payload?: {
+      departmentId?: string
+      effectiveDate?: string
+      note?: string
+      returnDate?: string
+    },
+  ) => void
   updateAgentStatus: (assetId: string, agent: AgentCode, status: AgentStatus) => void
   forwardToCustodian: (assetId: string, targetUserId: string) => void
   takeAssetAsCustodian: (assetId: string) => void
@@ -62,12 +92,13 @@ const AppStoreContext = createContext<AppStoreValue | null>(null)
 function appendAssignment(
   data: MockData,
   assetId: string,
-  action: MockData['assignments'][number]['action'],
+  action: AssignmentRecord['action'],
   fromUserId: string | null,
   toUserId: string | null,
   fromRole: Role | null,
   toRole: Role | null,
   note: string,
+  extras?: Partial<Pick<AssignmentRecord, 'createdAt' | 'effectiveDate' | 'departmentId' | 'departmentName' | 'returnDate' | 'ipAddress'>>,
 ) {
   data.assignments.unshift({
     id: crypto.randomUUID(),
@@ -78,8 +109,21 @@ function appendAssignment(
     fromRole,
     toRole,
     note,
-    createdAt: new Date().toISOString(),
+    createdAt: extras?.createdAt ?? new Date().toISOString(),
+    effectiveDate: extras?.effectiveDate,
+    departmentId: extras?.departmentId,
+    departmentName: extras?.departmentName,
+    returnDate: extras?.returnDate,
+    ipAddress: extras?.ipAddress,
   })
+}
+
+function toAssignmentTimestamp(value?: string) {
+  if (!value) {
+    return new Date().toISOString()
+  }
+
+  return `${value}T00:00:00.000Z`
 }
 
 function updateAssetStage(
@@ -106,12 +150,16 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
 
     const bootstrap = async () => {
       const response = await fetch('/mockdata.json')
-      const seedData = (await response.json()) as MockData
+      const seedData = enrichMockData((await response.json()) as MockData)
       const persistedRaw = localStorage.getItem(STORAGE_KEY)
       const persistedData = persistedRaw ? (JSON.parse(persistedRaw) as MockData) : null
       const nextData =
         persistedData && persistedData.seedVersion === seedData.seedVersion
-          ? persistedData
+          ? enrichMockData({
+              ...seedData,
+              ...persistedData,
+              departments: persistedData.departments ?? seedData.departments,
+            })
           : seedData
       const sessionUserId = localStorage.getItem(SESSION_KEY)
       const nextUser = sessionUserId
@@ -148,6 +196,104 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
 
     localStorage.removeItem(SESSION_KEY)
   }, [currentUser])
+
+  const assignAssetsFromWarehouseInternal = (
+    assetIds: string[],
+    targetUserId: string,
+    payload?: {
+      departmentId?: string
+      effectiveDate?: string
+      note?: string
+      returnDate?: string
+    },
+  ) => {
+    if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
+      return
+    }
+
+    const target = data.users.find((item) => item.id === targetUserId)
+    const uniqueAssetIds = Array.from(new Set(assetIds.filter(Boolean)))
+    const department = payload?.departmentId
+      ? data.departments?.find((item) => item.id === payload.departmentId)
+      : undefined
+
+    if (!target || uniqueAssetIds.length === 0) {
+      return
+    }
+
+    if (!['IT_SPECIALIST', 'ASSET_CUSTODIAN'].includes(target.role)) {
+      pushToast({
+        title: 'Invalid handoff',
+        description: 'Warehouse can only assign assets to IT or Asset Custodian.',
+        tone: 'danger',
+      })
+      return
+    }
+
+    const nextData = structuredClone(data)
+    const assignedAssets: Asset[] = []
+
+    uniqueAssetIds.forEach((assetId) => {
+      const asset = nextData.assets.find((item) => item.id === assetId)
+
+      if (!asset || asset.currentStage !== 'WAREHOUSE') {
+        return
+      }
+
+      const readiness = getAssetReadiness(asset, nextData.assetTypes, nextData.agentStatuses)
+
+      if (target.role === 'ASSET_CUSTODIAN' && readiness !== 'READY') {
+        return
+      }
+
+      updateAssetStage(
+        nextData,
+        assetId,
+        target.role === 'IT_SPECIALIST' ? 'IT_SPECIALIST' : 'ASSET_CUSTODIAN',
+        target.id,
+      )
+      appendAssignment(
+        nextData,
+        assetId,
+        target.role === 'IT_SPECIALIST' ? 'ASSIGNED_TO_IT' : 'ASSIGNED_TO_CUSTODIAN',
+        currentUser.id,
+        target.id,
+        currentUser.role,
+        target.role,
+        payload?.note?.trim() || `${asset.assetTag} sent from warehouse to ${target.fullName}.`,
+        {
+          createdAt: toAssignmentTimestamp(payload?.effectiveDate),
+          effectiveDate: payload?.effectiveDate,
+          departmentId: department?.id,
+          departmentName: department?.name,
+          returnDate: payload?.returnDate,
+        },
+      )
+      assignedAssets.push(asset)
+    })
+
+    if (assignedAssets.length === 0) {
+      pushToast({
+        title: 'No assets assigned',
+        description:
+          target.role === 'ASSET_CUSTODIAN'
+            ? 'Select warehouse assets that are READY before sending them to a custodian.'
+            : 'Select valid warehouse assets before sending them to IT.',
+        tone: 'danger',
+      })
+      return
+    }
+
+    setData(nextData)
+    pushToast({
+      title: 'Assignment saved',
+      description:
+        assignedAssets.length === 1
+          ? `${assignedAssets[0].assetTag} is now with ${target.fullName}.`
+          : `${assignedAssets.length} assets are now with ${target.fullName}.`,
+      tone: 'success',
+    })
+  }
 
   const value = useMemo<AppStoreValue>(
     () => ({
@@ -243,62 +389,150 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           tone: 'success',
         })
       },
-      assignFromWarehouse: (assetId, targetUserId) => {
+      createLegacyAssets: (payload) => {
         if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
           return
         }
 
-        const asset = data.assets.find((item) => item.id === assetId)
-        const target = data.users.find((item) => item.id === targetUserId)
+        const assetType = findLegacyAssetTypeById(payload.assetTypeId)
+        const category = findLegacyCategory(payload.categoryId)
 
-        if (!asset || !target || asset.currentStage !== 'WAREHOUSE') {
-          return
-        }
-
-        const readiness = getAssetReadiness(asset, data.assetTypes, data.agentStatuses)
-
-        if (target.role === 'ASSET_CUSTODIAN' && readiness !== 'READY') {
+        if (!assetType || !category) {
           pushToast({
-            title: 'Custodian handoff blocked',
-            description: 'Warehouse can only send READY assets to custodians.',
+            title: 'Create blocked',
+            description: 'Legacy asset type or category could not be resolved.',
             tone: 'danger',
           })
           return
         }
 
-        if (!['IT_SPECIALIST', 'ASSET_CUSTODIAN'].includes(target.role)) {
+        const quantity = Math.max(1, payload.quantity)
+        const nextData = structuredClone(data)
+
+        Array.from({ length: quantity }, (_, index) => {
+          const serialNumber =
+            payload.attributes.serialNumber && quantity === 1
+              ? payload.attributes.serialNumber
+              : `${assetType.code}-${String(nextData.assets.length + index + 1).padStart(5, '0')}`
+          const metadata = buildLegacyMetadataForCreate({
+            categoryType: payload.categoryType,
+            categoryId: category.id,
+            categoryName: category.name,
+            assetTypeId: assetType.id,
+            purchasePrice: payload.purchasePrice,
+            warrantyDate: payload.warrantyDate,
+            status: payload.status,
+            attributes: payload.attributes,
+          })
+
+          const createdAsset: Asset = {
+            id: crypto.randomUUID(),
+            assetTag: buildAssetTag(assetType.name, nextData.assets.length + 1),
+            name: quantity > 1 ? `${payload.name.trim()} ${index + 1}` : payload.name.trim(),
+            type: assetType.name,
+            serialNumber,
+            vendor: payload.attributes.vendor ?? 'Legacy Vendor',
+            location: payload.attributes.location ?? 'Warehouse',
+            procurementDate: payload.purchaseDate,
+            currentStage: 'WAREHOUSE',
+            currentAssigneeId: currentUser.id,
+            createdBy: currentUser.id,
+            metadata,
+          }
+
+          nextData.assets.unshift(createdAsset)
+          assetType.allowedAgents.forEach((agent) => {
+            nextData.agentStatuses.push({
+              assetId: createdAsset.id,
+              agent: agent as AgentCode,
+              status: 'PENDING',
+              updatedAt: new Date().toISOString(),
+              updatedBy: currentUser.id,
+            })
+          })
+          appendAssignment(
+            nextData,
+            createdAsset.id,
+            'CREATED',
+            null,
+            currentUser.id,
+            null,
+            currentUser.role,
+            `${createdAsset.assetTag} created from warehouse catalog.`,
+            { createdAt: toAssignmentTimestamp(payload.purchaseDate), effectiveDate: payload.purchaseDate },
+          )
+        })
+
+        setData(nextData)
+        pushToast({
+          title: 'Asset created',
+          description: `${quantity} ta asset synchronized mock data ichida yaratildi.`,
+          tone: 'success',
+        })
+      },
+      updateLegacyAsset: (assetId, payload) => {
+        if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
+          return
+        }
+
+        const assetType = findLegacyAssetTypeById(payload.assetTypeId)
+        const category = findLegacyCategory(payload.categoryId)
+        const existingAsset = data.assets.find((asset) => asset.id === assetId)
+
+        if (!assetType || !category || !existingAsset) {
           pushToast({
-            title: 'Invalid handoff',
-            description: 'Warehouse can only assign assets to IT or Asset Custodian.',
+            title: 'Update blocked',
+            description: 'Asset, category, or asset type could not be resolved.',
             tone: 'danger',
           })
           return
         }
 
         const nextData = structuredClone(data)
-        updateAssetStage(
-          nextData,
-          assetId,
-          target.role === 'IT_SPECIALIST' ? 'IT_SPECIALIST' : 'ASSET_CUSTODIAN',
-          target.id,
+        nextData.assets = nextData.assets.map((asset) =>
+          asset.id === assetId
+            ? {
+                ...asset,
+                name: payload.name.trim(),
+                type: assetType.name,
+                procurementDate: payload.purchaseDate,
+                vendor: payload.attributes.vendor ?? asset.vendor,
+                location: payload.attributes.location ?? asset.location,
+                serialNumber: payload.attributes.serialNumber ?? asset.serialNumber,
+                metadata: compactMetadata(
+                  mergeLegacyMetadata(
+                    asset.metadata,
+                    buildLegacyMetadataForCreate({
+                      categoryType: payload.categoryType,
+                      categoryId: category.id,
+                      categoryName: category.name,
+                      assetTypeId: assetType.id,
+                      purchasePrice: payload.purchasePrice,
+                      warrantyDate: payload.warrantyDate,
+                      status: payload.status,
+                      attributes: payload.attributes,
+                    }),
+                  ),
+                ),
+              }
+            : asset,
         )
-        appendAssignment(
-          nextData,
-          assetId,
-          target.role === 'IT_SPECIALIST' ? 'ASSIGNED_TO_IT' : 'ASSIGNED_TO_CUSTODIAN',
-          currentUser.id,
-          target.id,
-          currentUser.role,
-          target.role,
-          `${asset.assetTag} sent from warehouse to ${target.fullName}.`,
-        )
+
         setData(nextData)
         pushToast({
-          title: 'Assignment saved',
-          description: `${asset.assetTag} is now with ${target.fullName}.`,
+          title: 'Asset updated',
+          description: `${existingAsset.assetTag} synchronized mock data ichida yangilandi.`,
           tone: 'success',
         })
       },
+      assignFromWarehouse: (assetId, targetUserId) => {
+        if (!assetId) {
+          return
+        }
+
+        assignAssetsFromWarehouseInternal([assetId], targetUserId)
+      },
+      assignAssetsFromWarehouse: assignAssetsFromWarehouseInternal,
       updateAgentStatus: (assetId, agent, status) => {
         if (!data) {
           return
@@ -545,7 +779,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         })
       },
     }),
-    [currentUser, data, isBootstrapping, pushToast],
+    [assignAssetsFromWarehouseInternal, currentUser, data, isBootstrapping, pushToast],
   )
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>

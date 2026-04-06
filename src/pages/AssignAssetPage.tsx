@@ -3,19 +3,19 @@ import { AssetDetailCard } from '../components/assets/AssetDetailCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Pagination } from '../components/ui/Pagination'
 import { SearchSelect } from '../components/ui/SearchSelect'
-import { useAssetStore } from '../context/AssetContext'
-import { departments } from '../data/mockData'
+import { getAssetAgentStatuses, getAssetReadiness, getAssetType } from '../domain/rules'
+import type { Asset, MockData, User } from '../domain/types'
 import { useAppStore } from '../store/AppStore'
+import type { AssetRecord, CategoryType } from '../types'
 import { statusTone } from '../utils/asset'
 
 const today = new Date().toISOString().slice(0, 10)
 
 export function AssignAssetPage() {
-  const { assets, assignAssets } = useAssetStore()
-  const { getUsersByRole } = useAppStore()
+  const { data, getUsersByRole, getUserById, assignAssetsFromWarehouse } = useAppStore()
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
-  const [previewAssetId, setPreviewAssetId] = useState<string>('')
+  const [previewAssetId, setPreviewAssetId] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [form, setForm] = useState({
     departmentId: '',
@@ -24,24 +24,49 @@ export function AssignAssetPage() {
     note: '',
     returnDate: '',
   })
-  const custodians = getUsersByRole('ASSET_CUSTODIAN')
 
-  const assignableAssets = useMemo(
-    () =>
-      assets.filter(
-        (asset) =>
-          asset.status === 'available' &&
-          (asset.assetCode.toLowerCase().includes(search.toLowerCase()) ||
-            asset.name.toLowerCase().includes(search.toLowerCase()) ||
-            asset.assetTypeName.toLowerCase().includes(search.toLowerCase())),
-      ),
-    [assets, search],
-  )
+  const custodians = getUsersByRole('ASSET_CUSTODIAN')
+  const departments = data?.departments ?? []
+
+  const assignableAssets = useMemo(() => {
+    if (!data) {
+      return []
+    }
+
+    const normalizedSearch = search.trim().toLowerCase()
+
+    return data.assets.filter((asset) => {
+      if (asset.currentStage !== 'WAREHOUSE') {
+        return false
+      }
+
+      if (getAssetReadiness(asset, data.assetTypes, data.agentStatuses) !== 'READY') {
+        return false
+      }
+
+      if (!normalizedSearch) {
+        return true
+      }
+
+      return [asset.assetTag, asset.name, asset.type, asset.serialNumber, asset.location]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch)
+    })
+  }, [data, search])
 
   const previewAsset =
-    assets.find((asset) => asset.id === previewAssetId) ??
+    assignableAssets.find((asset) => asset.id === previewAssetId) ??
     assignableAssets.find((asset) => selectedAssetIds.includes(asset.id)) ??
     assignableAssets[0]
+
+  const previewRecord = useMemo(() => {
+    if (!data || !previewAsset) {
+      return undefined
+    }
+
+    return toAssetRecord(previewAsset, data, getUserById)
+  }, [data, getUserById, previewAsset])
 
   const pageSize = 8
   const totalPages = Math.max(1, Math.ceil(assignableAssets.length / pageSize))
@@ -50,6 +75,12 @@ export function AssignAssetPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [search])
+
+  useEffect(() => {
+    setSelectedAssetIds((current) =>
+      current.filter((assetId) => assignableAssets.some((asset) => asset.id === assetId)),
+    )
+  }, [assignableAssets])
 
   const toggleAsset = (assetId: string) => {
     setSelectedAssetIds((current) =>
@@ -62,16 +93,19 @@ export function AssignAssetPage() {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (selectedAssetIds.length === 0) {
+    if (selectedAssetIds.length === 0 || !form.employee) {
       return
     }
 
-    if (!form.employee) {
-      return
-    }
+    assignAssetsFromWarehouse(selectedAssetIds, form.employee, {
+      departmentId: form.departmentId || undefined,
+      effectiveDate: form.date,
+      note: form.note,
+      returnDate: form.returnDate || undefined,
+    })
 
-    assignAssets(selectedAssetIds, form)
     setSelectedAssetIds([])
+    setPreviewAssetId('')
     setForm({
       departmentId: '',
       date: today,
@@ -86,7 +120,7 @@ export function AssignAssetPage() {
       <PageHeader
         eyebrow="Asset assign"
         title="Assetni departmentga biriktirish"
-        description="Bu sahifada faqat biriktirishga oid ma'lumotlar kiritiladi. Asset ma'lumotlarini qayta yozishga hojat yo'q, omborchi faqat kerakli bog'lovchi maydonlarni to'ldiradi."
+        description="Bu sahifadagi mavjud UI saqlanadi. Endi formadagi barcha handoff maydonlari shared mock state ichida ham yoziladi va custodian loginida shu biriktirishlar real ko'rinadi."
         rightSlot={
           <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             Tanlangan assetlar: {selectedAssetIds.length}
@@ -107,8 +141,7 @@ export function AssignAssetPage() {
             </div>
             <input
               value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Code, nomi yoki type bo'yicha qidirish"
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100 lg:max-w-sm"
             />
@@ -117,6 +150,7 @@ export function AssignAssetPage() {
           <div className="grid gap-3 md:grid-cols-2">
             {paginatedAssets.map((asset) => {
               const selected = selectedAssetIds.includes(asset.id)
+
               return (
                 <button
                   key={asset.id}
@@ -136,15 +170,15 @@ export function AssignAssetPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{asset.name}</p>
-                        <p className="text-sm text-slate-500">{asset.assetTypeName}</p>
+                        <p className="text-sm text-slate-500">{asset.type}</p>
                       </div>
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusTone(asset.status)}`}
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusTone('available')}`}
                       >
-                        {asset.status}
+                        Omborda
                       </span>
                     </div>
-                    <p className="text-sm text-slate-600">{asset.assetCode}</p>
+                    <p className="text-sm text-slate-600">{asset.assetTag}</p>
                   </div>
                 </button>
               )
@@ -210,14 +244,12 @@ export function AssignAssetPage() {
                 <SearchSelect
                   label="Custodian user search"
                   options={custodians.map((user) => ({
-                    label: `${user.fullName} · ${user.team}`,
-                    value: user.fullName,
+                    label: `${user.fullName} - ${user.team}`,
+                    value: user.id,
                   }))}
                   value={form.employee}
                   placeholder="asset custodian"
-                  onChange={(value) =>
-                    setForm((current) => ({ ...current, employee: value }))
-                  }
+                  onChange={(value) => setForm((current) => ({ ...current, employee: value }))}
                   variant="light"
                 />
               </div>
@@ -264,9 +296,81 @@ export function AssignAssetPage() {
             </button>
           </form>
 
-          <AssetDetailCard asset={previewAsset} />
+          <AssetDetailCard asset={previewRecord} />
         </div>
       </div>
     </div>
   )
+}
+
+function toAssetRecord(
+  asset: Asset,
+  data: MockData,
+  getUserById: (userId: string | null) => User | null,
+): AssetRecord {
+  const assetType = getAssetType(asset, data.assetTypes)
+  const latestAssignment = data.assignments.find((item) => item.assetId === asset.id)
+  const assignee = getUserById(asset.currentAssigneeId)
+  const categoryType = mapCategoryType(assetType?.category)
+  const departmentName =
+    latestAssignment?.departmentName ??
+    asset.metadata.department ??
+    (asset.currentStage === 'WAREHOUSE' ? undefined : assignee?.team)
+  const securityStatuses = getAssetAgentStatuses(
+    asset.id,
+    data.agentStatuses,
+    data.assetTypes,
+    asset,
+  )
+
+  return {
+    id: asset.id,
+    assetCode: asset.assetTag,
+    name: asset.name,
+    categoryType,
+    categoryId: assetType?.id ?? asset.type.toLowerCase(),
+    categoryName: assetType?.category ?? 'Uncategorized',
+    assetTypeId: assetType?.id ?? asset.type.toLowerCase(),
+    assetTypeName: asset.type,
+    status: asset.currentStage === 'WAREHOUSE' ? 'available' : 'assigned',
+    purchasePrice: 0,
+    purchaseDate: asset.procurementDate,
+    warrantyDate: addYears(asset.procurementDate, 3),
+    departmentId: latestAssignment?.departmentId,
+    departmentName,
+    returnDate: latestAssignment?.returnDate,
+    attributes: asset.metadata,
+    securityStatuses,
+    history: data.assignments
+      .filter((item) => item.assetId === asset.id)
+      .map((item) => ({
+        id: item.id,
+        action: item.action === 'CREATED' ? 'created' : 'assigned',
+        date: item.effectiveDate ?? item.createdAt.slice(0, 10),
+        actor: getUserById(item.toUserId)?.fullName ?? getUserById(item.fromUserId)?.fullName ?? 'System',
+        note: item.note,
+        departmentId: item.departmentId,
+        departmentName: item.departmentName,
+        returnDate: item.returnDate,
+      })),
+  }
+}
+
+function mapCategoryType(category?: string): CategoryType {
+  switch (category) {
+    case 'Application':
+      return 'SOFTWARE'
+    case 'Endpoint':
+    case 'Infrastructure':
+    case 'Network':
+      return 'HARDWARE'
+    default:
+      return 'NON_IT'
+  }
+}
+
+function addYears(dateValue: string, years: number) {
+  const next = new Date(dateValue)
+  next.setFullYear(next.getFullYear() + years)
+  return next.toISOString().slice(0, 10)
 }
