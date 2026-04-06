@@ -17,6 +17,7 @@ export function AssignAssetPage() {
   const [search, setSearch] = useState('')
   const [previewAssetId, setPreviewAssetId] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [targetRole, setTargetRole] = useState<'IT_SPECIALIST' | 'ASSET_CUSTODIAN'>('IT_SPECIALIST')
   const [form, setForm] = useState({
     departmentId: '',
     date: today,
@@ -25,7 +26,7 @@ export function AssignAssetPage() {
     returnDate: '',
   })
 
-  const custodians = getUsersByRole('ASSET_CUSTODIAN')
+  const assignableUsers = getUsersByRole(targetRole)
   const departments = data?.departments ?? []
 
   const assignableAssets = useMemo(() => {
@@ -40,7 +41,10 @@ export function AssignAssetPage() {
         return false
       }
 
-      if (getAssetReadiness(asset, data.assetTypes, data.agentStatuses) !== 'READY') {
+      if (
+        targetRole === 'ASSET_CUSTODIAN' &&
+        getAssetReadiness(asset, data.assetTypes, data.agentStatuses) !== 'READY'
+      ) {
         return false
       }
 
@@ -53,7 +57,7 @@ export function AssignAssetPage() {
         .toLowerCase()
         .includes(normalizedSearch)
     })
-  }, [data, search])
+  }, [data, search, targetRole])
 
   const previewAsset =
     assignableAssets.find((asset) => asset.id === previewAssetId) ??
@@ -74,13 +78,17 @@ export function AssignAssetPage() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [search])
+  }, [search, targetRole])
 
   useEffect(() => {
     setSelectedAssetIds((current) =>
       current.filter((assetId) => assignableAssets.some((asset) => asset.id === assetId)),
     )
   }, [assignableAssets])
+
+  useEffect(() => {
+    setForm((current) => ({ ...current, employee: '' }))
+  }, [targetRole])
 
   const toggleAsset = (assetId: string) => {
     setSelectedAssetIds((current) =>
@@ -119,8 +127,8 @@ export function AssignAssetPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Asset assign"
-        title="Assetni departmentga biriktirish"
-        description="Bu sahifadagi mavjud UI saqlanadi. Endi formadagi barcha handoff maydonlari shared mock state ichida ham yoziladi va custodian loginida shu biriktirishlar real ko'rinadi."
+        title="Assetni IT yoki custodianga biriktirish"
+        description="Jarayon endi bosqichma-bosqich ishlaydi: warehouse manager avval assetni IT specialistga yuboradi. Faqat IT tayyorlab, asset READY holatga kelgandan keyingina warehouse manager uni custodianga topshira oladi."
         rightSlot={
           <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             Tanlangan assetlar: {selectedAssetIds.length}
@@ -136,7 +144,9 @@ export function AssignAssetPage() {
                 Available assets
               </p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                Ombordan berilishi mumkin bo'lgan assetlar
+                {targetRole === 'IT_SPECIALIST'
+                  ? "IT specialistga yuborilishi mumkin bo'lgan assetlar"
+                  : "Custodianga yuborilishi mumkin bo'lgan tayyor assetlar"}
               </h3>
             </div>
             <input
@@ -173,9 +183,17 @@ export function AssignAssetPage() {
                         <p className="text-sm text-slate-500">{asset.type}</p>
                       </div>
                       <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusTone('available')}`}
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          targetRole === 'ASSET_CUSTODIAN' && data
+                            ? getAssetReadiness(asset, data.assetTypes, data.agentStatuses) === 'READY'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700'
+                            : statusTone('available')
+                        }`}
                       >
-                        Omborda
+                        {targetRole === 'ASSET_CUSTODIAN' && data
+                          ? getAssetReadiness(asset, data.assetTypes, data.agentStatuses)
+                          : 'Omborda'}
                       </span>
                     </div>
                     <p className="text-sm text-slate-600">{asset.assetTag}</p>
@@ -202,9 +220,26 @@ export function AssignAssetPage() {
                 Biriktirish ma'lumotlari
               </p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                Departmentga topshirish formasi
+                Workflow handoff formasi
               </h3>
             </div>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-slate-700">Biriktirish bosqichi *</span>
+              <select
+                value={targetRole}
+                onChange={(event) =>
+                  setTargetRole(event.target.value as 'IT_SPECIALIST' | 'ASSET_CUSTODIAN')
+                }
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+              >
+                <option value="IT_SPECIALIST">IT Specialist</option>
+                <option value="ASSET_CUSTODIAN">Asset Custodian</option>
+              </select>
+              <span className="text-xs text-slate-500">
+                Custodianga yuborish faqat READY assetlar uchun ruxsat etiladi.
+              </span>
+            </label>
 
             <label className="grid gap-2">
               <span className="text-sm font-medium text-slate-700">Department *</span>
@@ -239,22 +274,26 @@ export function AssignAssetPage() {
             </label>
 
             <div className="grid gap-2">
-              <span className="text-sm font-medium text-slate-700">Asset Custodian *</span>
+              <span className="text-sm font-medium text-slate-700">
+                {targetRole === 'IT_SPECIALIST' ? 'IT Specialist *' : 'Asset Custodian *'}
+              </span>
               <div className="rounded-[24px] border border-slate-200 p-3">
                 <SearchSelect
-                  label="Custodian user search"
-                  options={custodians.map((user) => ({
+                  label={targetRole === 'IT_SPECIALIST' ? 'IT user search' : 'Custodian user search'}
+                  options={assignableUsers.map((user) => ({
                     label: `${user.fullName} - ${user.team}`,
                     value: user.id,
                   }))}
                   value={form.employee}
-                  placeholder="asset custodian"
+                  placeholder={targetRole === 'IT_SPECIALIST' ? 'it specialist' : 'asset custodian'}
                   onChange={(value) => setForm((current) => ({ ...current, employee: value }))}
                   variant="light"
                 />
               </div>
               <span className="text-xs text-slate-500">
-                F.I.Sh qo'lda yozilmaydi, role=`ASSET_CUSTODIAN` userlardan tanlanadi.
+                {targetRole === 'IT_SPECIALIST'
+                  ? "F.I.Sh qo'lda yozilmaydi, role=`IT_SPECIALIST` userlardan tanlanadi."
+                  : "F.I.Sh qo'lda yozilmaydi, role=`ASSET_CUSTODIAN` userlardan tanlanadi."}
               </span>
             </div>
 
@@ -292,7 +331,9 @@ export function AssignAssetPage() {
               type="submit"
               className="w-full rounded-2xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-600"
             >
-              Tanlangan assetlarni biriktirish
+              {targetRole === 'IT_SPECIALIST'
+                ? "Tanlangan assetlarni IT specialistga yuborish"
+                : "Tanlangan assetlarni custodianga biriktirish"}
             </button>
           </form>
 
