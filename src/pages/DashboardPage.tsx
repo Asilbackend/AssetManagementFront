@@ -5,7 +5,7 @@ import { DashboardModal } from '../components/dashboard/DashboardModal'
 import { AssetTypeCard } from '../components/dashboard/AssetTypeCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useAssetStore } from '../context/AssetContext'
-import { assetTypes, categories } from '../data/mockData'
+import { assetTypes, categories, securityAgents } from '../data/mockData'
 import type { CategoryType, Status } from '../types'
 import { filterAssetsByCategoryType, statusLabels } from '../utils/asset'
 import {
@@ -101,6 +101,40 @@ export function DashboardPage() {
       activeTypeCount: filteredAssetTypes.length,
     }),
     [categoryScopedAssets, filteredAssetTypes, filteredCategories, visibleAssets],
+  )
+
+  const edrCoverage = useMemo(() => {
+    const edrCapableAssets = assets.filter((asset) =>
+      asset.securityStatuses.some((item) => item.agent === 'EDR'),
+    )
+    const edrInstalledAssets = edrCapableAssets.filter((asset) =>
+      asset.securityStatuses.some((item) => item.agent === 'EDR' && item.status === 'INSTALLED'),
+    )
+
+    return {
+      capable: edrCapableAssets.length,
+      installed: edrInstalledAssets.length,
+      percent:
+        edrCapableAssets.length > 0
+          ? Math.round((edrInstalledAssets.length / edrCapableAssets.length) * 100)
+          : 0,
+    }
+  }, [assets])
+
+  const agentAssetCounts = useMemo(
+    () =>
+      securityAgents.map((agent) => ({
+        agent,
+        assetCount: assets.filter((asset) =>
+          asset.securityStatuses.some((item) => item.agent === agent),
+        ).length,
+        installedCount: assets.filter((asset) =>
+          asset.securityStatuses.some(
+            (item) => item.agent === agent && item.status === 'INSTALLED',
+          ),
+        ).length,
+      })),
+    [assets],
   )
 
   const openTypeModal = (typeId: string) => {
@@ -210,6 +244,51 @@ export function DashboardPage() {
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-900">{stats.activeTypeCount}</p>
         </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
+        <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
+            EDR coverage
+          </p>
+          <p className="mt-3 text-4xl font-semibold text-slate-900">{edrCoverage.percent}%</p>
+          <p className="mt-2 text-sm text-slate-500">
+            EDR o'rnatilishi mumkin bo'lgan {edrCoverage.capable} ta assetdan{' '}
+            {edrCoverage.installed} tasida EDR o'rnatilgan.
+          </p>
+        </article>
+
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
+                Agent statistics
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">
+                Har bir agent bo'yicha assetlar soni
+              </h3>
+            </div>
+            <p className="text-sm text-slate-500">
+              `Asset count` agent qo'llanadigan assetlar, `Installed` esa amalda o'rnatilganlari.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {agentAssetCounts.map((item) => (
+              <article
+                key={item.agent}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                  {item.agent}
+                </p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">{item.assetCount}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Installed: {item.installedCount}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[var(--shadow-card)]">

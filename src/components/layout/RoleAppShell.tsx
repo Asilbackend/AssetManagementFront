@@ -3,8 +3,14 @@ import { NavLink } from 'react-router-dom'
 import { useAppStore } from '../../store/AppStore'
 
 const menuByRole = {
-  IT_SPECIALIST: [{ label: 'Dashboard', to: '/it-specialist' }],
-  ASSET_CUSTODIAN: [{ label: 'Dashboard', to: '/asset-custodian' }],
+  IT_SPECIALIST: [
+    { label: 'Dashboard', to: '/dashboard' },
+    { label: 'IT Specialist', to: '/it-specialist' },
+  ],
+  ASSET_CUSTODIAN: [
+    { label: 'Dashboard', to: '/dashboard' },
+    { label: 'Asset Custodian', to: '/asset-custodian' },
+  ],
   EMPLOYEE: [{ label: 'My Assets', to: '/my-assets' }],
 }
 

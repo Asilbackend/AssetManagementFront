@@ -91,7 +91,12 @@ function AppRoutes() {
       <Route path="/reports" element={<WarehouseRoute element={<ReportsPage />} />} />
       <Route
         path="/dashboard"
-        element={<Navigate to={currentUser ? defaultRouteForRole(currentUser.role) : '/login'} replace />}
+        element={
+          <RoleRoute
+            allow={['IT_SPECIALIST', 'ASSET_CUSTODIAN']}
+            element={<DashboardPage />}
+          />
+        }
       />
       <Route
         path="/it-specialist"
