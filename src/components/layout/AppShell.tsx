@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useAppStore } from '../../store/AppStore'
 
 const navItems = [
   { to: '/', label: 'Dashboard' },
@@ -9,6 +10,8 @@ const navItems = [
 ]
 
 export function AppShell({ children }: PropsWithChildren) {
+  const { logout } = useAppStore()
+
   return (
     <div className="h-screen lg:grid lg:grid-cols-[290px_minmax(0,1fr)]">
       <aside className="border-b border-white/10 bg-[linear-gradient(180deg,rgba(18,34,54,0.98),rgba(21,40,61,0.98))] px-6 py-8 text-white lg:min-h-screen lg:border-b-0 lg:border-r">
@@ -57,10 +60,16 @@ export function AppShell({ children }: PropsWithChildren) {
               <li>Haftalik, oylik va yillik hisobotlarni export qilish</li>
             </ul>
           </div>
+          <button
+            onClick={logout}
+            className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/12"
+          >
+            Logout
+          </button>
         </div>
       </aside>
 
-      <main className="px-4 py-5 overflow-y-auto sm:px-6 lg:px-8 lg:py-8">{children}</main>
+      <main className="overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
     </div>
   )
 }

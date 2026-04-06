@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Pagination } from '../components/ui/Pagination'
 import { useAssetStore } from '../context/AssetContext'
 import { reportPresets } from '../data/mockData'
 import type { ReportPeriod } from '../types'
@@ -15,6 +16,7 @@ export function ReportsPage() {
   const { assets } = useAssetStore()
   const [period, setPeriod] = useState<ReportPeriod>('monthly')
   const [message, setMessage] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const activePreset = getReportPreset(period)
 
   const reportAssets = useMemo(() => filterAssetsForReport(assets, period), [assets, period])
@@ -30,6 +32,13 @@ export function ReportsPage() {
     }),
     [reportAssets],
   )
+  const pageSize = 10
+  const totalPages = Math.max(1, Math.ceil(reportAssets.length / pageSize))
+  const paginatedAssets = reportAssets.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [period])
 
   return (
     <div className="space-y-6">
@@ -129,7 +138,7 @@ export function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {reportAssets.map((asset) => (
+              {paginatedAssets.map((asset) => (
                 <tr key={asset.id} className="border-t border-slate-100 bg-white">
                   <td className="px-5 py-4 font-semibold text-slate-900">{asset.assetCode}</td>
                   <td className="px-5 py-4">
@@ -152,6 +161,12 @@ export function ReportsPage() {
             </div>
           ) : null}
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          variant="light"
+        />
       </section>
     </div>
   )

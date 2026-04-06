@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { AssetRecord } from '../../types'
 import { statusLabels, statusTone } from '../../utils/asset'
+import { useAppStore } from '../../store/AppStore'
 
 type AssetListTableProps = {
   assets: AssetRecord[]
@@ -15,6 +16,9 @@ export function AssetListTable({
   onSelect,
   onViewDetails,
 }: AssetListTableProps) {
+  const { currentUser } = useAppStore()
+  const canEdit = currentUser?.role === 'WAREHOUSE_MANAGER'
+
   if (assets.length === 0) {
     return (
       <div className="rounded-[28px] border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
@@ -77,13 +81,15 @@ export function AssetListTable({
                     >
                       Details
                     </button>
-                    <Link
-                      to={`/assets/${asset.id}/edit`}
-                      onClick={(event) => event.stopPropagation()}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Edit
-                    </Link>
+                    {canEdit ? (
+                      <Link
+                        to={`/assets/${asset.id}/edit`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Edit
+                      </Link>
+                    ) : null}
                   </div>
                 </td>
               </tr>

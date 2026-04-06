@@ -3,6 +3,7 @@ import type {
   AssetRecord,
   AssetTypeDefinition,
   CategoryType,
+  SecurityInstallStatus,
   Status,
 } from '../types'
 import { categoryTypeLabels } from './category'
@@ -100,5 +101,17 @@ export const statusTone = (status: Status) => {
       return 'bg-rose-100 text-rose-700'
     default:
       return 'bg-slate-100 text-slate-700'
+  }
+}
+
+export const securityStatusTone = (status: SecurityInstallStatus) => {
+  switch (status) {
+    case 'INSTALLED':
+      return 'bg-emerald-100 text-emerald-700'
+    case 'FAILED':
+      return 'bg-rose-100 text-rose-700'
+    case 'PENDING':
+    default:
+      return 'bg-amber-100 text-amber-700'
   }
 }

@@ -51,6 +51,10 @@ export function AssetProvider({ children }: PropsWithChildren) {
             warrantyDate: payload.warrantyDate,
             returnDate: undefined,
             attributes: { ...payload.attributes },
+            securityStatuses: assetType.allowedAgents.map((agent) => ({
+              agent,
+              status: 'PENDING' as const,
+            })),
             history: [
               {
                 id: crypto.randomUUID(),

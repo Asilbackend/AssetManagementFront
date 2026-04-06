@@ -1,17 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AssetDetailCard } from '../components/assets/AssetDetailCard'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Pagination } from '../components/ui/Pagination'
+import { SearchSelect } from '../components/ui/SearchSelect'
 import { useAssetStore } from '../context/AssetContext'
 import { departments } from '../data/mockData'
+import { useAppStore } from '../store/AppStore'
 import { statusTone } from '../utils/asset'
 
 const today = new Date().toISOString().slice(0, 10)
 
 export function AssignAssetPage() {
   const { assets, assignAssets } = useAssetStore()
+  const { getUsersByRole } = useAppStore()
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [previewAssetId, setPreviewAssetId] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [form, setForm] = useState({
     departmentId: '',
     date: today,
@@ -19,6 +24,7 @@ export function AssignAssetPage() {
     note: '',
     returnDate: '',
   })
+  const custodians = getUsersByRole('ASSET_CUSTODIAN')
 
   const assignableAssets = useMemo(
     () =>
@@ -37,6 +43,14 @@ export function AssignAssetPage() {
     assignableAssets.find((asset) => selectedAssetIds.includes(asset.id)) ??
     assignableAssets[0]
 
+  const pageSize = 8
+  const totalPages = Math.max(1, Math.ceil(assignableAssets.length / pageSize))
+  const paginatedAssets = assignableAssets.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
+
   const toggleAsset = (assetId: string) => {
     setSelectedAssetIds((current) =>
       current.includes(assetId)
@@ -49,6 +63,10 @@ export function AssignAssetPage() {
     event.preventDefault()
 
     if (selectedAssetIds.length === 0) {
+      return
+    }
+
+    if (!form.employee) {
       return
     }
 
@@ -89,14 +107,15 @@ export function AssignAssetPage() {
             </div>
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
+            
               placeholder="Code, nomi yoki type bo'yicha qidirish"
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100 lg:max-w-sm"
             />
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            {assignableAssets.map((asset) => {
+            {paginatedAssets.map((asset) => {
               const selected = selectedAssetIds.includes(asset.id)
               return (
                 <button
@@ -131,6 +150,12 @@ export function AssignAssetPage() {
               )
             })}
           </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            variant="light"
+          />
         </section>
 
         <div className="space-y-6">
@@ -179,18 +204,27 @@ export function AssignAssetPage() {
               />
             </label>
 
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-slate-700">Qabul qilgan xodim *</span>
-              <input
-                value={form.employee}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, employee: event.target.value }))
-                }
-                placeholder="F.I.Sh"
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
-                required
-              />
-            </label>
+            <div className="grid gap-2">
+              <span className="text-sm font-medium text-slate-700">Asset Custodian *</span>
+              <div className="rounded-[24px] border border-slate-200 p-3">
+                <SearchSelect
+                  label="Custodian user search"
+                  options={custodians.map((user) => ({
+                    label: `${user.fullName} · ${user.team}`,
+                    value: user.fullName,
+                  }))}
+                  value={form.employee}
+                  placeholder="asset custodian"
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, employee: value }))
+                  }
+                  variant="light"
+                />
+              </div>
+              <span className="text-xs text-slate-500">
+                F.I.Sh qo'lda yozilmaydi, role=`ASSET_CUSTODIAN` userlardan tanlanadi.
+              </span>
+            </div>
 
             <label className="grid gap-2">
               <span className="text-sm font-medium text-slate-700">Izoh</span>

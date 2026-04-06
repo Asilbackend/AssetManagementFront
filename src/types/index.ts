@@ -31,7 +31,15 @@ export type AssetTypeDefinition = {
   description: string
   seedCount: number
   defaultPrice: number
+  allowedAgents: string[]
   attributes: AssetAttribute[]
+}
+
+export type SecurityInstallStatus = 'PENDING' | 'INSTALLED' | 'FAILED'
+
+export type SecurityAgentState = {
+  agent: string
+  status: SecurityInstallStatus
 }
 
 export type Department = {
@@ -67,6 +75,7 @@ export type AssetRecord = {
   departmentName?: string
   returnDate?: string
   attributes: Record<string, string>
+  securityStatuses: SecurityAgentState[]
   history: AssetHistory[]
 }
 
