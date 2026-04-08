@@ -1,17 +1,29 @@
 import type { PropsWithChildren } from 'react'
 import { NavLink } from 'react-router-dom'
+import { roleLabel } from '../../domain/rules'
 import { useAppStore } from '../../store/AppStore'
 
 const menuByRole = {
+  ADMIN: [
+    { label: 'Bosh sahifa', to: '/admin' },
+    { label: 'Asset yaratish', to: '/create' },
+    { label: 'Arizalar', to: '/requests' },
+  ],
+  DIRECTOR: [
+    { label: 'Tasdiqlar', to: '/director' },
+    { label: 'Arizalar', to: '/requests' },
+  ],
   IT_SPECIALIST: [
-    { label: 'Dashboard', to: '/dashboard' },
-    { label: 'IT Specialist', to: '/it-specialist' },
+    { label: 'Umumiy panel', to: '/dashboard' },
+    { label: 'IT bo‘limi', to: '/it-specialist' },
+    { label: 'Arizalar', to: '/requests' },
   ],
   ASSET_CUSTODIAN: [
-    { label: 'Dashboard', to: '/dashboard' },
-    { label: 'Asset Custodian', to: '/asset-custodian' },
+    { label: 'Rahbar paneli', to: '/asset-custodian' },
+    { label: 'Umumiy panel', to: '/dashboard' },
+    { label: 'Arizalar', to: '/requests' },
   ],
-  EMPLOYEE: [{ label: 'My Assets', to: '/my-assets' }],
+  EMPLOYEE: [{ label: 'Mening assetlarim', to: '/my-assets' }],
 }
 
 export function RoleAppShell({ children }: PropsWithChildren) {
@@ -28,11 +40,10 @@ export function RoleAppShell({ children }: PropsWithChildren) {
           <div>
             <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">AssetOps</p>
             <h1 className="mt-3 text-2xl font-semibold leading-tight text-white">
-              Security Workflow Console
+              Procurement boshqaruv paneli
             </h1>
             <p className="mt-3 text-sm text-slate-400">
-              IT specialist, custodian, and employee workspaces stay separate from the warehouse
-              dashboard.
+              Admin, direktor, rahbar, IT va xodim ish joylari ombor panelidan alohida ishlaydi.
             </p>
           </div>
           <nav className="mt-10 space-y-2">
@@ -54,15 +65,15 @@ export function RoleAppShell({ children }: PropsWithChildren) {
           </nav>
           <div className="mt-auto pt-10">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Signed in as</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Joriy foydalanuvchi</p>
               <p className="mt-2 text-base font-semibold text-white">{currentUser.fullName}</p>
-              <p className="mt-1 text-sm text-slate-400">{currentUser.role.replaceAll('_', ' ')}</p>
+              <p className="mt-1 text-sm text-slate-400">{roleLabel(currentUser.role)}</p>
             </div>
             <button
               onClick={logout}
               className="mt-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/10"
             >
-              Sign out
+              Chiqish
             </button>
           </div>
         </aside>

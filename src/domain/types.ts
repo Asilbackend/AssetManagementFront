@@ -1,4 +1,6 @@
 export type Role =
+  | 'ADMIN'
+  | 'DIRECTOR'
   | 'WAREHOUSE_MANAGER'
   | 'ASSET_CUSTODIAN'
   | 'IT_SPECIALIST'
@@ -25,6 +27,8 @@ export type WorkflowStage =
   | 'IT_SPECIALIST'
   | 'ASSET_CUSTODIAN'
   | 'EMPLOYEE'
+
+export type RequestStatus = 'CREATED' | 'APPROVED' | 'PURCHASED'
 
 export type AgentDefinition = {
   code: AgentCode
@@ -75,7 +79,33 @@ export type Asset = {
   currentStage: WorkflowStage
   currentAssigneeId: string | null
   createdBy: string
+  requestId?: string
+  expectedPrice?: number
+  actualPrice?: number
   metadata: Record<string, string>
+}
+
+export type RequestItem = {
+  id: string
+  name: string
+  quantity: number
+  specs: string
+  expectedPrice: number
+  fulfilledQuantity?: number
+}
+
+export type Request = {
+  id: string
+  title: string
+  createdBy: string
+  status: RequestStatus
+  items: RequestItem[]
+  approvedBy?: string
+  fileUrl?: string
+  note?: string
+  reviewedByAdminAt?: string
+  approvedAt?: string
+  purchasedAt?: string
 }
 
 export type AgentStatusRecord = {
@@ -118,6 +148,7 @@ export type MockData = {
   departments?: Department[]
   assetTypes: AssetType[]
   assets: Asset[]
+  requests?: Request[]
   agentStatuses: AgentStatusRecord[]
   assignments: AssignmentRecord[]
 }

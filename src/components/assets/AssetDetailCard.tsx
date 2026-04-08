@@ -3,6 +3,7 @@ import type { AssetRecord } from '../../types'
 import {
   formatDate,
   readAssetPrimaryDetails,
+  securityStatusLabel,
   securityStatusTone,
   statusTone,
 } from '../../utils/asset'
@@ -14,7 +15,7 @@ type AssetDetailCardProps = {
 
 export function AssetDetailCard({ asset }: AssetDetailCardProps) {
   const { currentUser } = useAppStore()
-  const canEdit = currentUser?.role === 'WAREHOUSE_MANAGER'
+  const canEdit = currentUser?.role === 'ADMIN'
 
   if (!asset) {
     return (
@@ -31,7 +32,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
-            Asset detail
+            Asset ma'lumotlari
           </p>
           <h3 className="text-2xl font-semibold text-slate-900">{asset.name}</h3>
           <p className="text-sm text-slate-500">{asset.assetTypeName}</p>
@@ -46,7 +47,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
             to={`/assets/${asset.id}/edit`}
             className="inline-flex w-fit rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
-            Edit asset
+            Assetni tahrirlash
           </Link>
         ) : null}
       </div>
@@ -67,7 +68,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
 
       <div className="space-y-3">
         <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Security agent holati
+          Xavfsizlik agentlari holati
         </h4>
         {asset.securityStatuses.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2">
@@ -81,7 +82,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
                   <span
                     className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${securityStatusTone(item.status)}`}
                   >
-                    {item.status}
+                    {securityStatusLabel(item.status)}
                   </span>
                 </div>
               </article>
@@ -89,7 +90,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
           </div>
         ) : (
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Ushbu asset uchun security agent talab qilinmaydi.
+            Ushbu asset uchun xavfsizlik agenti talab qilinmaydi.
           </div>
         )}
       </div>
@@ -112,7 +113,7 @@ export function AssetDetailCard({ asset }: AssetDetailCardProps) {
 
       <div className="space-y-3">
         <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-          History
+          Tarix
         </h4>
         <div className="space-y-3">
           {asset.history.map((item) => (

@@ -34,6 +34,7 @@ import type {
   AssetType,
   AssignmentRecord,
   MockData,
+  RequestItem,
   Role,
   User,
   WorkflowStage,
@@ -46,7 +47,22 @@ type CreateAssetInput = {
   vendor: string
   location: string
   procurementDate: string
+  requestId?: string
+  actualPrice?: number
+  expectedPrice?: number
   metadata: Record<string, string>
+}
+
+type CreateRequestInput = {
+  title: string
+  fileUrl?: string
+  note?: string
+  items: Array<{
+    name: string
+    quantity: number
+    specs: string
+    expectedPrice: number
+  }>
 }
 
 function compactMetadata(input: Record<string, string | undefined>) {
@@ -66,6 +82,9 @@ type AppStoreValue = {
   createAsset: (payload: CreateAssetInput) => void
   createLegacyAssets: (payload: LegacyCreateAssetInput) => void
   updateLegacyAsset: (assetId: string, payload: LegacyUpdateAssetInput) => void
+  createRequest: (payload: CreateRequestInput) => void
+  reviewRequestAsAdmin: (requestId: string) => void
+  approveRequest: (requestId: string) => void
   assignFromWarehouse: (assetId: string, targetUserId: string) => void
   assignAssetsFromWarehouse: (
     assetIds: string[],
@@ -98,7 +117,12 @@ function appendAssignment(
   fromRole: Role | null,
   toRole: Role | null,
   note: string,
-  extras?: Partial<Pick<AssignmentRecord, 'createdAt' | 'effectiveDate' | 'departmentId' | 'departmentName' | 'returnDate' | 'ipAddress'>>,
+  extras?: Partial<
+    Pick<
+      AssignmentRecord,
+      'createdAt' | 'effectiveDate' | 'departmentId' | 'departmentName' | 'returnDate' | 'ipAddress'
+    >
+  >,
 ) {
   data.assignments.unshift({
     id: crypto.randomUUID(),
@@ -139,6 +163,90 @@ function updateAssetStage(
   )
 }
 
+function getRequestList(data: MockData) {
+  if (!data.requests) {
+    data.requests = []
+  }
+
+  return data.requests
+}
+
+function getWarehouseOwner(data: MockData) {
+  return data.users.find((user) => user.role === 'WAREHOUSE_MANAGER') ?? null
+}
+
+function getDefaultItSpecialist(data: MockData) {
+  return data.users.find((user) => user.role === 'IT_SPECIALIST') ?? null
+}
+
+function isSoftwareCategory(categoryType?: LegacyCreateAssetInput['categoryType']) {
+  return categoryType === 'SOFTWARE'
+}
+
+function canWarehouseAssignAssetToCustodian(
+  data: MockData,
+  asset: Asset,
+  target: User,
+) {
+  if (target.role !== 'ASSET_CUSTODIAN') {
+    return true
+  }
+
+  if (!asset.requestId) {
+    return true
+  }
+
+  const request = getRequestList(data).find((item) => item.id === asset.requestId)
+
+  if (!request) {
+    return true
+  }
+
+  const owner = data.users.find((user) => user.id === request.createdBy)
+
+  if (!owner) {
+    return true
+  }
+
+  if (owner.role === 'ADMIN') {
+    return true
+  }
+
+  return owner.id === target.id
+}
+
+function updateRequestPurchaseProgress(
+  data: MockData,
+  requestId: string | undefined,
+  requestItemId: string | undefined,
+  quantity: number,
+) {
+  if (!requestId || !requestItemId) {
+    return
+  }
+
+  const requests = getRequestList(data)
+  const request = requests.find((item) => item.id === requestId)
+
+  if (!request) {
+    return
+  }
+
+  request.items = request.items.map((item) =>
+    item.id === requestItemId
+      ? {
+          ...item,
+          fulfilledQuantity: Math.min(item.quantity, (item.fulfilledQuantity ?? 0) + quantity),
+        }
+      : item,
+  )
+
+  if (request.items.every((item) => (item.fulfilledQuantity ?? 0) >= item.quantity)) {
+    request.status = 'PURCHASED'
+    request.purchasedAt = new Date().toISOString()
+  }
+}
+
 export function AppStoreProvider({ children }: PropsWithChildren) {
   const [data, setData] = useState<MockData | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -159,6 +267,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
               ...seedData,
               ...persistedData,
               departments: persistedData.departments ?? seedData.departments,
+              requests: persistedData.requests ?? seedData.requests,
             })
           : seedData
       const sessionUserId = localStorage.getItem(SESSION_KEY)
@@ -224,7 +333,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     if (!['IT_SPECIALIST', 'ASSET_CUSTODIAN'].includes(target.role)) {
       pushToast({
         title: 'Invalid handoff',
-        description: 'Warehouse can only assign assets to IT or Asset Custodian.',
+        description: 'Warehouse can only assign assets to IT or manager custodians.',
         tone: 'danger',
       })
       return
@@ -232,6 +341,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
 
     const nextData = structuredClone(data)
     const assignedAssets: Asset[] = []
+    const blockedByOwnership: string[] = []
 
     uniqueAssetIds.forEach((assetId) => {
       const asset = nextData.assets.find((item) => item.id === assetId)
@@ -243,6 +353,11 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       const readiness = getAssetReadiness(asset, nextData.assetTypes, nextData.agentStatuses)
 
       if (target.role === 'ASSET_CUSTODIAN' && readiness !== 'READY') {
+        return
+      }
+
+      if (!canWarehouseAssignAssetToCustodian(nextData, asset, target)) {
+        blockedByOwnership.push(asset.assetTag)
         return
       }
 
@@ -276,9 +391,11 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       pushToast({
         title: 'No assets assigned',
         description:
-          target.role === 'ASSET_CUSTODIAN'
-            ? 'Select warehouse assets that are READY before sending them to a custodian.'
-            : 'Select valid warehouse assets before sending them to IT.',
+          blockedByOwnership.length > 0
+            ? `These assets can only go to the request owner: ${blockedByOwnership.join(', ')}`
+            : target.role === 'ASSET_CUSTODIAN'
+              ? 'Select warehouse assets that are READY and belong to the target manager.'
+              : 'Select valid warehouse assets before sending them to IT.',
         tone: 'danger',
       })
       return
@@ -333,7 +450,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       getUserById: (userId) => data?.users.find((user) => user.id === userId) ?? null,
       getUsersByRole: (role) => (data ? usersByRole(data.users, role) : []),
       createAsset: (payload) => {
-        if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
+        if (!data || !currentUser || currentUser.role !== 'ADMIN') {
           return
         }
 
@@ -345,6 +462,13 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         }
 
         const nextData = structuredClone(data)
+        const warehouseOwner = getWarehouseOwner(nextData)
+        const defaultIt = getDefaultItSpecialist(nextData)
+        const category = assetType.category.toLowerCase()
+        const stage: WorkflowStage =
+          category.includes('application') ? 'IT_SPECIALIST' : 'WAREHOUSE'
+        const assigneeId =
+          stage === 'WAREHOUSE' ? warehouseOwner?.id ?? null : defaultIt?.id ?? null
         const createdAsset: Asset = {
           id: crypto.randomUUID(),
           assetTag: buildAssetTag(assetType.name, nextData.assets.length + 1),
@@ -354,9 +478,12 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           vendor: payload.vendor.trim(),
           location: payload.location.trim(),
           procurementDate: payload.procurementDate,
-          currentStage: 'WAREHOUSE',
-          currentAssigneeId: currentUser.id,
+          currentStage: stage,
+          currentAssigneeId: assigneeId,
           createdBy: currentUser.id,
+          requestId: payload.requestId,
+          expectedPrice: payload.expectedPrice,
+          actualPrice: payload.actualPrice,
           metadata: payload.metadata,
         }
 
@@ -376,21 +503,21 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           createdAsset.id,
           'CREATED',
           null,
-          currentUser.id,
+          assigneeId,
           null,
-          currentUser.role,
-          `Asset created in warehouse with ${assetType.allowedAgents.length} required agents.`,
+          stage === 'WAREHOUSE' ? 'WAREHOUSE_MANAGER' : 'IT_SPECIALIST',
+          `Asset created by procurement admin and routed to ${stage === 'WAREHOUSE' ? 'warehouse' : 'IT'}.`,
         )
 
         setData(nextData)
         pushToast({
           title: 'Asset created',
-          description: `${createdAsset.assetTag} is now waiting in the warehouse queue.`,
+          description: `${createdAsset.assetTag} entered the procurement workflow.`,
           tone: 'success',
         })
       },
       createLegacyAssets: (payload) => {
-        if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
+        if (!data || !currentUser || currentUser.role !== 'ADMIN') {
           return
         }
 
@@ -406,8 +533,40 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           return
         }
 
-        const quantity = Math.max(1, payload.quantity)
         const nextData = structuredClone(data)
+        const request = payload.requestId
+          ? getRequestList(nextData).find((item) => item.id === payload.requestId)
+          : undefined
+        const requestItem = request?.items.find((item) => item.id === payload.requestItemId)
+
+        if (request && request.status !== 'APPROVED' && request.status !== 'PURCHASED') {
+          pushToast({
+            title: 'Request not approved',
+            description: 'Only approved requests can be converted into assets.',
+            tone: 'danger',
+          })
+          return
+        }
+
+        const quantity = Math.max(1, payload.quantity)
+        const remainingQuantity = requestItem
+          ? requestItem.quantity - (requestItem.fulfilledQuantity ?? 0)
+          : undefined
+
+        if (typeof remainingQuantity === 'number' && remainingQuantity >= 0 && quantity > remainingQuantity) {
+          pushToast({
+            title: 'Quantity exceeds request',
+            description: `Only ${remainingQuantity} units remain in the selected request item.`,
+            tone: 'danger',
+          })
+          return
+        }
+
+        const warehouseOwner = getWarehouseOwner(nextData)
+        const defaultIt = getDefaultItSpecialist(nextData)
+        const stage: WorkflowStage = isSoftwareCategory(payload.categoryType) ? 'IT_SPECIALIST' : 'WAREHOUSE'
+        const assigneeId =
+          stage === 'WAREHOUSE' ? warehouseOwner?.id ?? null : defaultIt?.id ?? null
 
         Array.from({ length: quantity }, (_, index) => {
           const serialNumber =
@@ -419,7 +578,9 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
             categoryId: category.id,
             categoryName: category.name,
             assetTypeId: assetType.id,
-            purchasePrice: payload.purchasePrice,
+            requestId: payload.requestId,
+            expectedPrice: requestItem?.expectedPrice ?? payload.expectedPrice ?? payload.purchasePrice,
+            purchasePrice: payload.actualPrice ?? payload.purchasePrice,
             warrantyDate: payload.warrantyDate,
             status: payload.status,
             attributes: payload.attributes,
@@ -432,11 +593,16 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
             type: assetType.name,
             serialNumber,
             vendor: payload.attributes.vendor ?? 'Legacy Vendor',
-            location: payload.attributes.location ?? 'Warehouse',
+            location:
+              payload.attributes.location ??
+              (stage === 'WAREHOUSE' ? 'Warehouse' : 'IT Preparation Queue'),
             procurementDate: payload.purchaseDate,
-            currentStage: 'WAREHOUSE',
-            currentAssigneeId: currentUser.id,
+            currentStage: stage,
+            currentAssigneeId: assigneeId,
             createdBy: currentUser.id,
+            requestId: payload.requestId,
+            expectedPrice: requestItem?.expectedPrice ?? payload.expectedPrice ?? payload.purchasePrice,
+            actualPrice: payload.actualPrice ?? payload.purchasePrice,
             metadata,
           }
 
@@ -455,23 +621,25 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
             createdAsset.id,
             'CREATED',
             null,
-            currentUser.id,
+            assigneeId,
             null,
-            currentUser.role,
-            `${createdAsset.assetTag} created from warehouse catalog.`,
+            stage === 'WAREHOUSE' ? 'WAREHOUSE_MANAGER' : 'IT_SPECIALIST',
+            `${createdAsset.assetTag} created by procurement admin from approved request.`,
             { createdAt: toAssignmentTimestamp(payload.purchaseDate), effectiveDate: payload.purchaseDate },
           )
         })
 
+        updateRequestPurchaseProgress(nextData, payload.requestId, payload.requestItemId, quantity)
+
         setData(nextData)
         pushToast({
           title: 'Asset created',
-          description: `${quantity} ta asset synchronized mock data ichida yaratildi.`,
+          description: `${quantity} ta asset procurement flow bo'yicha yaratildi.`,
           tone: 'success',
         })
       },
       updateLegacyAsset: (assetId, payload) => {
-        if (!data || !currentUser || currentUser.role !== 'WAREHOUSE_MANAGER') {
+        if (!data || !currentUser || currentUser.role !== 'ADMIN') {
           return
         }
 
@@ -499,6 +667,9 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
                 vendor: payload.attributes.vendor ?? asset.vendor,
                 location: payload.attributes.location ?? asset.location,
                 serialNumber: payload.attributes.serialNumber ?? asset.serialNumber,
+                expectedPrice: payload.expectedPrice ?? asset.expectedPrice ?? payload.purchasePrice,
+                actualPrice: payload.actualPrice ?? payload.purchasePrice,
+                requestId: payload.requestId ?? asset.requestId,
                 metadata: compactMetadata(
                   mergeLegacyMetadata(
                     asset.metadata,
@@ -507,7 +678,9 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
                       categoryId: category.id,
                       categoryName: category.name,
                       assetTypeId: assetType.id,
-                      purchasePrice: payload.purchasePrice,
+                      requestId: payload.requestId ?? asset.requestId,
+                      expectedPrice: payload.expectedPrice ?? asset.expectedPrice ?? payload.purchasePrice,
+                      purchasePrice: payload.actualPrice ?? payload.purchasePrice,
                       warrantyDate: payload.warrantyDate,
                       status: payload.status,
                       attributes: payload.attributes,
@@ -521,7 +694,91 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         setData(nextData)
         pushToast({
           title: 'Asset updated',
-          description: `${existingAsset.assetTag} synchronized mock data ichida yangilandi.`,
+          description: `${existingAsset.assetTag} procurement metadata bilan yangilandi.`,
+          tone: 'success',
+        })
+      },
+      createRequest: (payload) => {
+        if (!data || !currentUser || currentUser.role !== 'ASSET_CUSTODIAN') {
+          return
+        }
+
+        const cleanedItems: RequestItem[] = payload.items
+          .filter((item) => item.name.trim() && item.quantity > 0)
+          .map((item) => ({
+            id: crypto.randomUUID(),
+            name: item.name.trim(),
+            quantity: Math.max(1, item.quantity),
+            specs: item.specs.trim(),
+            expectedPrice: Math.max(0, item.expectedPrice),
+            fulfilledQuantity: 0,
+          }))
+
+        if (!payload.title.trim() || cleanedItems.length === 0) {
+          pushToast({
+            title: 'Request incomplete',
+            description: 'Manager request uchun sarlavha va kamida bitta item kerak.',
+            tone: 'danger',
+          })
+          return
+        }
+
+        const nextData = structuredClone(data)
+        getRequestList(nextData).unshift({
+          id: `REQ-${String(getRequestList(nextData).length + 1).padStart(4, '0')}`,
+          title: payload.title.trim(),
+          createdBy: currentUser.id,
+          status: 'CREATED',
+          items: cleanedItems,
+          fileUrl: payload.fileUrl?.trim() || undefined,
+          note: payload.note?.trim() || undefined,
+        })
+        setData(nextData)
+        pushToast({
+          title: 'Request created',
+          description: 'Manager request admin procurement queue ga yuborildi.',
+          tone: 'success',
+        })
+      },
+      reviewRequestAsAdmin: (requestId) => {
+        if (!data || !currentUser || currentUser.role !== 'ADMIN') {
+          return
+        }
+
+        const nextData = structuredClone(data)
+        const request = getRequestList(nextData).find((item) => item.id === requestId)
+
+        if (!request || request.status !== 'CREATED') {
+          return
+        }
+
+        request.reviewedByAdminAt = new Date().toISOString()
+        setData(nextData)
+        pushToast({
+          title: 'Request prepared',
+          description: `${request.id} director approval uchun tayyorlandi.`,
+          tone: 'info',
+        })
+      },
+      approveRequest: (requestId) => {
+        if (!data || !currentUser || currentUser.role !== 'DIRECTOR') {
+          return
+        }
+
+        const nextData = structuredClone(data)
+        const request = getRequestList(nextData).find((item) => item.id === requestId)
+
+        if (!request || request.status !== 'CREATED') {
+          return
+        }
+
+        request.status = 'APPROVED'
+        request.approvedBy = currentUser.id
+        request.approvedAt = new Date().toISOString()
+        setData(nextData)
+        pushToast({
+          title: 'Request approved',
+          description: `${request.id} procurement uchun tasdiqlandi.`,
           tone: 'success',
         })
       },
@@ -615,6 +872,16 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           return
         }
 
+        const request = asset.requestId ? getRequestList(data).find((item) => item.id === asset.requestId) : undefined
+        if (request && request.createdBy !== target.id) {
+          pushToast({
+            title: 'Forward blocked',
+            description: 'Software asset should return to the manager who created the request.',
+            tone: 'danger',
+          })
+          return
+        }
+
         const nextData = structuredClone(data)
         updateAssetStage(nextData, assetId, 'ASSET_CUSTODIAN', target.id)
         appendAssignment(
@@ -625,12 +892,12 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           target.id,
           currentUser.role,
           target.role,
-          `${asset.assetTag} is ready and forwarded to the custodian queue.`,
+          `${asset.assetTag} is ready and forwarded to the manager custodian queue.`,
         )
         setData(nextData)
         pushToast({
           title: 'Asset forwarded',
-          description: `${asset.assetTag} is now awaiting custodian intake.`,
+          description: `${asset.assetTag} is now awaiting manager intake.`,
           tone: 'success',
         })
       },
@@ -654,7 +921,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         if (readiness !== 'READY') {
           pushToast({
             title: 'Take blocked',
-            description: 'Custodians can only take READY assets.',
+            description: 'Managers can only take READY assets.',
             tone: 'danger',
           })
           return
@@ -669,7 +936,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
           currentUser.id,
           currentUser.role,
           currentUser.role,
-          `${asset.assetTag} taken into custodian control.`,
+          `${asset.assetTag} taken into manager custody.`,
         )
         setData(nextData)
         pushToast({

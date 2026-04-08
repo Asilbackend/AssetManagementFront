@@ -77,16 +77,19 @@ export const filterAssetsByCategoryType = (
     : assets.filter((asset) => asset.categoryType === categoryType)
 
 export const readAssetPrimaryDetails = (asset: AssetRecord) => [
-  { label: 'Asset code', value: asset.assetCode },
-  { label: 'Category type', value: categoryTypeLabels[asset.categoryType] },
-  { label: 'Category', value: asset.categoryName },
-  { label: 'Asset type', value: asset.assetTypeName },
-  { label: 'Status', value: statusLabels[asset.status] },
-  { label: 'Purchase price', value: formatCurrency(asset.purchasePrice) },
-  { label: 'Department', value: asset.departmentName ?? 'Ombor' },
-  { label: 'Returned date', value: formatDate(asset.returnDate ?? '') },
-  { label: 'Purchase date', value: formatDate(asset.purchaseDate) },
-  { label: 'Warranty date', value: formatDate(asset.warrantyDate) },
+  { label: 'Asset kodi', value: asset.assetCode },
+  { label: 'Ariza ID', value: asset.requestId ?? "Bog'lanmagan" },
+  { label: 'Kategoriya turi', value: categoryTypeLabels[asset.categoryType] },
+  { label: 'Kategoriya', value: asset.categoryName },
+  { label: 'Asset turi', value: asset.assetTypeName },
+  { label: 'Holati', value: statusLabels[asset.status] },
+  { label: 'Xarid narxi', value: formatCurrency(asset.purchasePrice) },
+  { label: 'Kutilgan narx', value: formatCurrency(asset.expectedPrice ?? asset.purchasePrice) },
+  { label: 'Amaldagi narx', value: formatCurrency(asset.actualPrice ?? asset.purchasePrice) },
+  { label: 'Bo‘lim', value: asset.departmentName ?? 'Ombor' },
+  { label: 'Qaytarish sanasi', value: formatDate(asset.returnDate ?? '') },
+  { label: 'Xarid sanasi', value: formatDate(asset.purchaseDate) },
+  { label: 'Kafolat sanasi', value: formatDate(asset.warrantyDate) },
 ]
 
 export const statusTone = (status: Status) => {
@@ -113,5 +116,17 @@ export const securityStatusTone = (status: SecurityInstallStatus) => {
     case 'PENDING':
     default:
       return 'bg-amber-100 text-amber-700'
+  }
+}
+
+export const securityStatusLabel = (status: SecurityInstallStatus) => {
+  switch (status) {
+    case 'INSTALLED':
+      return "O'rnatilgan"
+    case 'FAILED':
+      return 'Xatolik'
+    case 'PENDING':
+    default:
+      return 'Kutilmoqda'
   }
 }

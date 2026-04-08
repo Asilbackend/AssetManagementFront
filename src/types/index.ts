@@ -69,6 +69,9 @@ export type AssetRecord = {
   assetTypeName: string
   status: Status
   purchasePrice: number
+  expectedPrice?: number
+  actualPrice?: number
+  requestId?: string
   purchaseDate: string
   warrantyDate: string
   departmentId?: string
@@ -84,7 +87,11 @@ export type CreateAssetInput = {
   categoryType: CategoryType
   categoryId: string
   assetTypeId: string
+  requestId?: string
+  requestItemId?: string
   quantity: number
+  expectedPrice?: number
+  actualPrice?: number
   purchasePrice: number
   purchaseDate: string
   warrantyDate: string

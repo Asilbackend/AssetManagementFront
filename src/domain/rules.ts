@@ -5,8 +5,10 @@ import type {
   AssetReadiness,
   AssetType,
   MockData,
+  RequestStatus,
   Role,
   User,
+  WorkflowStage,
 } from './types'
 
 export function getAssetType(asset: Asset, assetTypes: AssetType[]) {
@@ -106,4 +108,55 @@ export function assetSearchText(asset: Asset, data: MockData, assignee?: User | 
 
 export function assetSupportsIp(asset: Asset, assetTypes: AssetType[]) {
   return getAssetType(asset, assetTypes)?.fields.some((field) => field.id === 'ipAddress') ?? false
+}
+
+export function workflowStageLabel(stage: WorkflowStage) {
+  switch (stage) {
+    case 'WAREHOUSE':
+      return 'Ombor'
+    case 'IT_SPECIALIST':
+      return 'IT mutaxassisi'
+    case 'ASSET_CUSTODIAN':
+      return 'Rahbar'
+    case 'EMPLOYEE':
+      return 'Xodim'
+    default:
+      return stage
+  }
+}
+
+export function readinessLabel(readiness: AssetReadiness) {
+  return readiness === 'READY' ? 'Tayyor' : 'Tayyor emas'
+}
+
+export function requestStatusLabel(status: RequestStatus) {
+  switch (status) {
+    case 'CREATED':
+      return 'Yaratilgan'
+    case 'APPROVED':
+      return 'Tasdiqlangan'
+    case 'PURCHASED':
+      return 'Sotib olingan'
+    default:
+      return status
+  }
+}
+
+export function roleLabel(role: Role) {
+  switch (role) {
+    case 'ADMIN':
+      return "Ma'muriy xo'jalik rahbari"
+    case 'DIRECTOR':
+      return 'Direktor'
+    case 'WAREHOUSE_MANAGER':
+      return 'Omborchi'
+    case 'ASSET_CUSTODIAN':
+      return 'Rahbar'
+    case 'IT_SPECIALIST':
+      return 'IT mutaxassisi'
+    case 'EMPLOYEE':
+      return 'Xodim'
+    default:
+      return role
+  }
 }

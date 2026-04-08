@@ -15,6 +15,8 @@ const META_KEYS = {
   categoryId: '__legacyCategoryId',
   categoryName: '__legacyCategoryName',
   assetTypeId: '__legacyAssetTypeId',
+  requestId: '__requestId',
+  expectedPrice: '__expectedPrice',
   purchasePrice: '__legacyPurchasePrice',
   warrantyDate: '__legacyWarrantyDate',
   status: '__legacyStatus',
@@ -168,6 +170,7 @@ export function enrichMockData(seedData: MockData): MockData {
 
   return {
     ...seedData,
+    requests: seedData.requests ?? [],
     departments,
     assetTypes: [
       ...seedData.assetTypes,
@@ -225,6 +228,17 @@ export function readLegacyPurchasePrice(asset: Asset, assetType?: AssetTypeDefin
   return Number.isFinite(value) ? value : 0
 }
 
+export function readLegacyExpectedPrice(asset: Asset, assetType?: AssetTypeDefinition) {
+  const value = Number(
+    asset.expectedPrice ?? asset.metadata[META_KEYS.expectedPrice] ?? readLegacyPurchasePrice(asset, assetType),
+  )
+  return Number.isFinite(value) ? value : 0
+}
+
+export function readLegacyRequestId(asset: Asset) {
+  return asset.requestId ?? asset.metadata[META_KEYS.requestId]
+}
+
 export function readLegacyWarrantyDate(asset: Asset) {
   return asset.metadata[META_KEYS.warrantyDate] ?? asset.procurementDate
 }
@@ -256,6 +270,8 @@ export function buildLegacyMetadataForCreate(payload: {
   categoryId: string
   categoryName: string
   assetTypeId: string
+  requestId?: string
+  expectedPrice?: number
   purchasePrice: number
   warrantyDate: string
   status: string
@@ -267,6 +283,8 @@ export function buildLegacyMetadataForCreate(payload: {
     [META_KEYS.categoryId]: payload.categoryId,
     [META_KEYS.categoryName]: payload.categoryName,
     [META_KEYS.assetTypeId]: payload.assetTypeId,
+    [META_KEYS.requestId]: payload.requestId ?? '',
+    [META_KEYS.expectedPrice]: String(payload.expectedPrice ?? payload.purchasePrice),
     [META_KEYS.purchasePrice]: String(payload.purchasePrice),
     [META_KEYS.warrantyDate]: payload.warrantyDate,
     [META_KEYS.status]: payload.status,

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { DynamicField } from '../forms/DynamicField'
 import { assetTypes, categories } from '../../data/mockData'
 import type { AssetRecord, CategoryType, CreateAssetInput, Status, UpdateAssetInput } from '../../types'
+import type { Request } from '../../domain/types'
 import { buildAssetCode, buildEmptyAttributes, nextSequenceForType } from '../../utils/asset'
 import { categoryTypeDescriptions, categoryTypeLabels, categoryTypeTone } from '../../utils/category'
 
@@ -12,6 +13,7 @@ type AssetFormProps =
   | {
       mode: 'create'
       assets: AssetRecord[]
+      requests?: Request[]
       initialAsset?: undefined
       submitLabel: string
       onSubmit: (payload: CreateAssetInput) => void
@@ -19,6 +21,7 @@ type AssetFormProps =
   | {
       mode: 'edit'
       assets: AssetRecord[]
+      requests?: Request[]
       initialAsset?: AssetRecord
       submitLabel: string
       onSubmit: (payload: UpdateAssetInput) => void
@@ -38,6 +41,7 @@ const pickDefaultAssetTypeId = (categoryId: string, asset?: AssetRecord) =>
 export function AssetForm({
   mode,
   assets,
+  requests = [],
   initialAsset,
   submitLabel,
   onSubmit,
@@ -55,6 +59,8 @@ export function AssetForm({
       initialAsset,
     ),
   )
+  const [requestId, setRequestId] = useState(initialAsset?.requestId ?? '')
+  const [requestItemId, setRequestItemId] = useState('')
   const [form, setForm] = useState({
     name: initialAsset?.name ?? '',
     quantity: 1,
@@ -80,6 +86,13 @@ export function AssetForm({
     ? assetTypeId
     : typeOptions[0]?.id ?? ''
   const selectedType = typeOptions.find((item) => item.id === activeAssetTypeId) ?? typeOptions[0]
+  const requestOptions = useMemo(
+    () => requests.filter((request) => request.status === 'APPROVED' || request.status === 'PURCHASED'),
+    [requests],
+  )
+  const selectedRequest = requestOptions.find((request) => request.id === requestId)
+  const requestItems = selectedRequest?.items ?? []
+  const selectedRequestItem = requestItems.find((item) => item.id === requestItemId)
 
   const updateAttributesForType = (nextAssetTypeId: string) => {
     const nextType = assetTypes.find((assetType) => assetType.id === nextAssetTypeId)
@@ -151,6 +164,8 @@ export function AssetForm({
     setCategoryType(nextCategoryType)
     setCategoryId(nextCategoryId)
     setAssetTypeId(nextAssetTypeId)
+    setRequestId(initialAsset?.requestId ?? '')
+    setRequestItemId('')
     setForm({
       name: initialAsset?.name ?? '',
       quantity: 1,
@@ -177,6 +192,10 @@ export function AssetForm({
         categoryType,
         categoryId: activeCategoryId,
         assetTypeId: activeAssetTypeId,
+        requestId: requestId || undefined,
+        requestItemId: requestItemId || undefined,
+        expectedPrice: selectedRequestItem?.expectedPrice,
+        actualPrice: form.purchasePrice,
         purchasePrice: form.purchasePrice,
         purchaseDate: form.purchaseDate,
         warrantyDate: form.warrantyDate,
@@ -207,7 +226,57 @@ export function AssetForm({
       className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-[var(--shadow-soft)]"
     >
       <div className="grid gap-4 xl:grid-cols-4">
-        <label className="grid gap-2">
+        {mode === 'create' ? (
+          <>
+            <label className="grid gap-2 xl:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Tasdiqlangan ariza</span>
+              <select
+                value={requestId}
+                onChange={(event) => {
+                  setRequestId(event.target.value)
+                  setRequestItemId('')
+                }}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+              >
+                <option value="">Mustaqil procurement</option>
+                {requestOptions.map((request) => (
+                  <option key={request.id} value={request.id}>
+                    {request.id} - {request.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-2 xl:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Ariza bandi</span>
+              <select
+                value={requestItemId}
+                onChange={(event) => {
+                  const nextItemId = event.target.value
+                  setRequestItemId(nextItemId)
+                  const nextItem = requestItems.find((item) => item.id === nextItemId)
+                  if (nextItem) {
+                    setForm((current) => ({
+                      ...current,
+                      name: current.name || nextItem.name,
+                    }))
+                  }
+                }}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+                disabled={!selectedRequest}
+              >
+                <option value="">{selectedRequest ? 'Ariza bandini tanlang' : 'Arizani tanlang'}</option>
+                {requestItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({item.fulfilledQuantity ?? 0}/{item.quantity})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : null}
+
+        <label className="grid gap-2 xl:col-span-2">
           <span className="text-sm font-medium text-slate-700">Category type *</span>
           <select
             value={categoryType}
@@ -216,16 +285,16 @@ export function AssetForm({
           >
             <option value="HARDWARE">Hardware</option>
             <option value="SOFTWARE">Software</option>
-            <option value="NON_IT">Non-IT Assets</option>
+            <option value="NON_IT">Non-IT assetlar</option>
           </select>
         </label>
 
-        <label className="grid gap-2">
+        <label className="grid gap-2 xl:col-span-2">
           <span className="text-sm font-medium text-slate-700">Category *</span>
           <select
             value={activeCategoryId}
             onChange={(event) => handleCategoryChange(event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+            className="rounded-2xl border border-slate-200 bg-white px-1 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
             required
             disabled={categoryOptions.length === 0}
           >
@@ -241,7 +310,7 @@ export function AssetForm({
         </label>
 
         <label className="grid gap-2">
-          <span className="text-sm font-medium text-slate-700">Asset type *</span>
+          <span className="text-sm font-medium text-slate-700">Asset turi *</span>
           <select
             value={activeAssetTypeId}
             onChange={(event) => handleAssetTypeChange(event.target.value)}
@@ -249,7 +318,7 @@ export function AssetForm({
             required
             disabled={typeOptions.length === 0}
           >
-            {typeOptions.length === 0 ? <option value="">Asset type topilmadi</option> : null}
+            {typeOptions.length === 0 ? <option value="">Asset turi topilmadi</option> : null}
             {typeOptions.map((assetType) => (
               <option key={assetType.id} value={assetType.id}>
                 {assetType.name}
@@ -259,7 +328,7 @@ export function AssetForm({
         </label>
 
         <label className="grid gap-2">
-          <span className="text-sm font-medium text-slate-700">Asset code</span>
+          <span className="text-sm font-medium text-slate-700">Asset kodi</span>
           <input
             value={generatedCode}
             readOnly
@@ -284,6 +353,12 @@ export function AssetForm({
               {categoryTypeLabels[categoryType]}
             </h3>
             <p className="mt-1 text-sm text-slate-500">{categoryTypeDescriptions[categoryType]}</p>
+            {selectedRequestItem ? (
+              <p className="mt-2 text-sm text-slate-500">
+                Kutilgan narx: {selectedRequestItem.expectedPrice}. Qolgan soni:{' '}
+                {selectedRequestItem.quantity - (selectedRequestItem.fulfilledQuantity ?? 0)}
+              </p>
+            ) : null}
           </div>
           <span
             className={`inline-flex w-fit rounded-full px-4 py-2 text-sm font-semibold ${categoryTypeTone[categoryType]}`}
@@ -301,7 +376,7 @@ export function AssetForm({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="grid gap-2">
-          <span className="text-sm font-medium text-slate-700">Asset name *</span>
+          <span className="text-sm font-medium text-slate-700">Asset nomi *</span>
           <input
             value={form.name}
             onChange={(event) =>
@@ -334,7 +409,7 @@ export function AssetForm({
         ) : null}
 
         <label className="grid gap-2">
-          <span className="text-sm font-medium text-slate-700">Status *</span>
+          <span className="text-sm font-medium text-slate-700">Holati *</span>
           <select
             value={form.status}
             onChange={(event) =>
@@ -399,7 +474,7 @@ export function AssetForm({
       <div className="space-y-4 rounded-[28px] bg-slate-50 p-5">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600">
-            Dynamic fields
+            Dinamik maydonlar
           </p>
           <h3 className="text-xl font-semibold text-slate-900">
             {selectedType?.name ?? 'Asset type tanlang'}

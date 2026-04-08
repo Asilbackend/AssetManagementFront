@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAssetReadiness } from '../../domain/rules'
+import { getAssetReadiness, readinessLabel, roleLabel, workflowStageLabel } from '../../domain/rules'
 import type { Asset, MockData, User } from '../../domain/types'
 import { Badge } from '../ui/Badge'
 import { Pagination } from '../ui/Pagination'
@@ -41,12 +41,12 @@ export function AssetTable({
           <thead className="bg-white/5 text-slate-300">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Asset</th>
-              <th className="px-4 py-3 text-left font-medium">Type</th>
-              <th className="px-4 py-3 text-left font-medium">Stage</th>
-              <th className="px-4 py-3 text-left font-medium">Readiness</th>
-              <th className="px-4 py-3 text-left font-medium">Assignee</th>
-              <th className="px-4 py-3 text-left font-medium">Location</th>
-              <th className="px-4 py-3 text-left font-medium">Actions</th>
+              <th className="px-4 py-3 text-left font-medium">Turi</th>
+              <th className="px-4 py-3 text-left font-medium">Bosqich</th>
+              <th className="px-4 py-3 text-left font-medium">Tayyorlik</th>
+              <th className="px-4 py-3 text-left font-medium">Biriktirilgan</th>
+              <th className="px-4 py-3 text-left font-medium">Joylashuv</th>
+              <th className="px-4 py-3 text-left font-medium">Amallar</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5 text-slate-200">
@@ -66,15 +66,15 @@ export function AssetTable({
                     <p className="mt-1 text-xs text-slate-500">{asset.vendor}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <Badge tone="info">{asset.currentStage.replaceAll('_', ' ')}</Badge>
+                    <Badge tone="info">{workflowStageLabel(asset.currentStage)}</Badge>
                   </td>
                   <td className="px-4 py-4">
-                    <Badge tone={readiness === 'READY' ? 'ready' : 'pending'}>{readiness}</Badge>
+                    <Badge tone={readiness === 'READY' ? 'ready' : 'pending'}>{readinessLabel(readiness)}</Badge>
                   </td>
                   <td className="px-4 py-4">
-                    <p>{assignee?.fullName ?? 'Unassigned'}</p>
+                    <p>{assignee?.fullName ?? 'Biriktirilmagan'}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {assignee?.role.replaceAll('_', ' ') ?? 'No owner'}
+                      {assignee?.role ? roleLabel(assignee.role) : 'Egasi yo‘q'}
                     </p>
                   </td>
                   <td className="px-4 py-4 text-slate-300">{asset.location}</td>

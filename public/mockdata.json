@@ -1,6 +1,6 @@
 {
-  "seedVersion": "2026-04-06-custodian-queue-v3",
-  "roles": ["WAREHOUSE_MANAGER", "ASSET_CUSTODIAN", "IT_SPECIALIST", "EMPLOYEE"],
+  "seedVersion": "2026-04-08-procurement-driven-v1",
+  "roles": ["ADMIN", "DIRECTOR", "WAREHOUSE_MANAGER", "ASSET_CUSTODIAN", "IT_SPECIALIST", "EMPLOYEE"],
   "agents": [
     { "code": "AD", "name": "Active Directory", "description": "Directory join and identity policy baseline." },
     { "code": "WAF", "name": "Web Application Firewall", "description": "Application-layer protection for internet-facing systems." },
@@ -16,6 +16,8 @@
     { "code": "VPN", "name": "Virtual Private Network", "description": "Encrypted remote or site-to-site connectivity." }
   ],
   "users": [
+    { "id": "user-admin-1", "username": "admin.proc", "password": "Password123!", "fullName": "Madina Yusupova", "role": "ADMIN", "team": "Administrative Procurement" },
+    { "id": "user-dir-1", "username": "director", "password": "Password123!", "fullName": "Aziz Rahmonov", "role": "DIRECTOR", "team": "Executive Office" },
     { "id": "user-wh-1", "username": "warehouse", "password": "Password123!", "fullName": "Nora Bennett", "role": "WAREHOUSE_MANAGER", "team": "Central Warehouse" },
     { "id": "user-it-1", "username": "it.ops", "password": "Password123!", "fullName": "Jamal Carter", "role": "IT_SPECIALIST", "team": "Endpoint Engineering" },
     { "id": "user-it-2", "username": "it.sec", "password": "Password123!", "fullName": "Priya Nair", "role": "IT_SPECIALIST", "team": "Security Engineering" },
@@ -190,6 +192,44 @@
     { "id": "asset-73", "assetTag": "S-0073", "name": "Warehouse Ready Server 2", "type": "Server", "serialNumber": "SRV-55073", "vendor": "HPE", "location": "HQ / Ready Bay C1", "procurementDate": "2026-04-06", "currentStage": "WAREHOUSE", "currentAssigneeId": "user-wh-1", "createdBy": "user-wh-1", "metadata": { "environment": "DR", "rack": "R1-U13", "ownerSystem": "Reporting", "ipAddress": "10.80.3.73" } },
     { "id": "asset-74", "assetTag": "NA-0074", "name": "Warehouse Ready Network Appliance 1", "type": "Network Appliance", "serialNumber": "NET-55074", "vendor": "Cisco", "location": "HQ / Ready Bay C2", "procurementDate": "2026-04-06", "currentStage": "WAREHOUSE", "currentAssigneeId": "user-wh-1", "createdBy": "user-wh-1", "metadata": { "deviceRole": "Firewall", "zone": "DMZ", "ipAddress": "172.30.1.74" } },
     { "id": "asset-75", "assetTag": "M-0075", "name": "Warehouse Ready Mobile Device 1", "type": "Mobile Device", "serialNumber": "MD-55075", "vendor": "Apple", "location": "HQ / Ready Bay C2", "procurementDate": "2026-04-06", "currentStage": "WAREHOUSE", "currentAssigneeId": "user-wh-1", "createdBy": "user-wh-1", "metadata": { "platform": "iOS", "carrier": "Uzmobile" } }
+  ],
+  "requests": [
+    {
+      "id": "REQ-0001",
+      "title": "Finance team laptop refresh",
+      "createdBy": "user-cu-1",
+      "status": "APPROVED",
+      "approvedBy": "user-dir-1",
+      "approvedAt": "2026-04-07T09:30:00.000Z",
+      "reviewedByAdminAt": "2026-04-07T08:00:00.000Z",
+      "fileUrl": "/docs/finance-laptop-refresh.docx",
+      "items": [
+        { "id": "REQ-0001-1", "name": "Finance Laptop", "quantity": 5, "specs": "Dell Latitude, 16GB RAM, Windows 11", "expectedPrice": 1450, "fulfilledQuantity": 0 }
+      ]
+    },
+    {
+      "id": "REQ-0002",
+      "title": "HR onboarding software licenses",
+      "createdBy": "user-cu-4",
+      "status": "CREATED",
+      "reviewedByAdminAt": "2026-04-08T06:00:00.000Z",
+      "fileUrl": "/docs/hr-license-request.pdf",
+      "items": [
+        { "id": "REQ-0002-1", "name": "HR Suite License", "quantity": 12, "specs": "Annual SaaS seats with SSO", "expectedPrice": 120, "fulfilledQuantity": 0 }
+      ]
+    },
+    {
+      "id": "REQ-0003",
+      "title": "Branch network upgrade",
+      "createdBy": "user-admin-1",
+      "status": "APPROVED",
+      "approvedBy": "user-dir-1",
+      "approvedAt": "2026-04-06T11:00:00.000Z",
+      "reviewedByAdminAt": "2026-04-06T09:00:00.000Z",
+      "items": [
+        { "id": "REQ-0003-1", "name": "Branch Firewall", "quantity": 2, "specs": "Next-gen firewall appliance", "expectedPrice": 3200, "fulfilledQuantity": 0 }
+      ]
+    }
   ],
   "agentStatuses": [
     { "assetId": "asset-1", "agent": "EDR", "status": "PENDING", "updatedAt": "2026-04-01T09:00:00.000Z", "updatedBy": "user-wh-1" },

@@ -2,17 +2,19 @@ import { useNavigate } from 'react-router-dom'
 import { AssetForm } from '../components/assets/AssetForm'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useAssetStore } from '../context/AssetContext'
+import { useAppStore } from '../store/AppStore'
 
 export function CreateAssetPage() {
   const navigate = useNavigate()
   const { assets, createAsset } = useAssetStore()
+  const { data } = useAppStore()
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Asset create"
-        title="Category type → category → asset type"
-        description="Yangi asset yaratishda avval category type tanlanadi, so'ngra shu type ichidagi category va asset type lar ko'rsatiladi. Omborchi son va sotib olingan narx kiritsa, tizim shu miqdorda bir xil asset yaratadi va faqat asset code tartib raqami bo'yicha o'zgaradi."
+        eyebrow="Admin Asset Create"
+        title="Approved requestdan asset create qilish"
+        description="Admin approved requestni tanlaydi, expected price requestdan olinadi va actual price real purchase sifatida saqlanadi. Hardware warehouse queue ga, software esa IT tayyorlash oqimiga tushadi."
         rightSlot={
           <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             Jami assetlar: {assets.length}
@@ -23,10 +25,11 @@ export function CreateAssetPage() {
       <AssetForm
         mode="create"
         assets={assets}
-        submitLabel="Asset yaratish"
+        requests={data?.requests ?? []}
+        submitLabel="Procurement asset yaratish"
         onSubmit={(payload) => {
           createAsset(payload)
-          navigate('/')
+          navigate('/admin')
         }}
       />
     </div>

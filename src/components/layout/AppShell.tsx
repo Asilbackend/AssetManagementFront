@@ -3,9 +3,9 @@ import { NavLink } from 'react-router-dom'
 import { useAppStore } from '../../store/AppStore'
 
 const navItems = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/create', label: 'Asset create' },
-  { to: '/assign', label: 'Asset assign' },
+  { to: '/', label: 'Bosh sahifa' },
+  { to: '/assign', label: 'Asset biriktirish' },
+  { to: '/requests', label: 'Arizalar' },
   { to: '/reports', label: 'Hisobotlar' },
 ]
 
@@ -21,11 +21,10 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-xs text-3xl font-semibold leading-tight">
-              Dynamic Asset Management Frontend
+              Asset boshqaruv tizimi
             </h1>
             <p className="max-w-sm text-sm leading-6 text-slate-300">
-              Xodim ortiqcha ma'lumot kiritmasligi uchun dashboard, create va assign
-              oqimlari alohida va yengil qilindi.
+              Procurement-driven modelda omborchi faqat storage va handoff oqimlarini boshqaradi.
             </p>
           </div>
 
@@ -55,8 +54,8 @@ export function AppShell({ children }: PropsWithChildren) {
             </p>
             <ul className="mt-4 space-y-3 text-sm text-slate-200">
               <li>Category va type bo'yicha assetlarni ko'rish</li>
-              <li>Dynamic form orqali asset create qilish</li>
-              <li>Assetni departmentga tez biriktirish</li>
+              <li>Request asosidagi hardware assetlarni qabul qilish</li>
+              <li>Assetni IT yoki request egasi bo'lgan managerga topshirish</li>
               <li>Haftalik, oylik va yillik hisobotlarni export qilish</li>
             </ul>
           </div>
@@ -64,7 +63,7 @@ export function AppShell({ children }: PropsWithChildren) {
             onClick={logout}
             className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/12"
           >
-            Logout
+            Chiqish
           </button>
         </div>
       </aside>
