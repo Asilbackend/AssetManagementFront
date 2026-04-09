@@ -289,7 +289,7 @@ export function AssetForm({
           </select>
         </label>
 
-        <label className="grid gap-2 xl:col-span-2">
+        <label className="grid gap-2 ">
           <span className="text-sm font-medium text-slate-700">Category *</span>
           <select
             value={activeCategoryId}
